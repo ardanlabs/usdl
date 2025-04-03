@@ -357,7 +357,7 @@ func (app *App) preprocessSendMessage(usr User, msg string) (string, string, err
 
 		publicKey, err := getPublicKey(usr.Key)
 		if err != nil {
-			return "", "", fmt.Errorf("unable to read public key")
+			return "", "", fmt.Errorf("unable to read public key: %w", err)
 		}
 
 		encryptedData, err := rsa.EncryptPKCS1v15(rand.Reader, publicKey, []byte(msg))
@@ -402,10 +402,10 @@ func getPublicKey(pemBlock string) (*rsa.PublicKey, error) {
 		return nil, errors.New("invalid key: Key must be a PEM encoded PKCS1 or PKCS8 key")
 	}
 
-	publicKey, err := x509.ParsePKCS1PublicKey(block.Bytes)
+	publicKey, err := x509.ParsePKIXPublicKey(block.Bytes)
 	if err != nil {
 		return nil, fmt.Errorf("parse public key: %w", err)
 	}
 
-	return publicKey, nil
+	return publicKey.(*rsa.PublicKey), nil
 }
