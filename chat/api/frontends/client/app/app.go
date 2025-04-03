@@ -202,7 +202,7 @@ func (app *App) ReceiveCapMessage(conn *websocket.Conn) {
 
 		decryptedMsg, _, err := app.preprocessRecvMessage(inMsg)
 		if err != nil {
-			app.ui.WriteText("system", []byte(fmt.Sprintf("preprocess message: %s", err)))
+			app.ui.WriteText("system", fmt.Appendf(nil, "preprocess message: %s", err))
 			return
 		}
 
@@ -211,7 +211,7 @@ func (app *App) ReceiveCapMessage(conn *websocket.Conn) {
 		fm := formatMessage(user.Name, decryptedMsg)
 
 		if err := app.db.InsertMessage(inMsg.From.ID, fm); err != nil {
-			app.ui.WriteText("system", []byte(fmt.Sprintf("add message: %s", err)))
+			app.ui.WriteText("system", fmt.Appendf(nil, "add message: %s", err))
 			return
 		}
 
