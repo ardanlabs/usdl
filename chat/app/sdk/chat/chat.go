@@ -166,7 +166,7 @@ func (c *Chat) ListenClient(ctx context.Context, from User) {
 			continue
 		}
 
-		c.log.Info(ctx, "CLIENT: msg recv", "fromNonce", inMsg.FromNonce, "from", from.ID, "to", inMsg.ToID, "message", inMsg.Msg)
+		c.log.Info(ctx, "CLIENT: msg recv", "fromNonce", inMsg.FromNonce, "from", from.ID, "to", inMsg.ToID, "encrypted", inMsg.Encrypted, "message", inMsg.Msg)
 
 		dataThatWasSign := struct {
 			ToID      common.Address
@@ -205,7 +205,7 @@ func (c *Chat) ListenClient(ctx context.Context, from User) {
 			continue
 		}
 
-		if err := c.sendMessage(from, to, inMsg.FromNonce, inMsg.Msg); err != nil {
+		if err := c.sendMessageClient(from, to, inMsg.FromNonce, inMsg.Encrypted, inMsg.Msg); err != nil {
 			c.log.Info(ctx, "loc-send", "ERROR", err)
 		}
 
@@ -231,7 +231,7 @@ func (c *Chat) listenBus() func(msg jetstream.Msg) {
 			return
 		}
 
-		c.log.Info(ctx, "BUS: msg recv", "fromNonce", busMsg.FromNonce, "from", busMsg.FromID, "to", busMsg.ToID, "message", busMsg.Msg, "fromName", busMsg.FromName)
+		c.log.Info(ctx, "BUS: msg recv", "fromNonce", busMsg.FromNonce, "from", busMsg.FromID, "to", "encrypted", busMsg.Encrypted, busMsg.ToID, "message", busMsg.Msg, "fromName", busMsg.FromName)
 
 		dataThatWasSign := struct {
 			ToID      common.Address
@@ -272,7 +272,7 @@ func (c *Chat) listenBus() func(msg jetstream.Msg) {
 			Name: busMsg.FromName,
 		}
 
-		if err := c.sendMessage(from, to, busMsg.incomingMessage.FromNonce, busMsg.Msg); err != nil {
+		if err := c.sendMessageClient(from, to, busMsg.FromNonce, busMsg.Encrypted, busMsg.Msg); err != nil {
 			c.log.Info(ctx, "bus-send", "ERROR", err)
 		}
 
@@ -346,14 +346,15 @@ func (c *Chat) readMessage(ctx context.Context, usr User) ([]byte, error) {
 	return resp.msg, nil
 }
 
-func (c *Chat) sendMessage(from User, to User, fromNonce uint64, msg string) error {
+func (c *Chat) sendMessageClient(from User, to User, fromNonce uint64, encrypted bool, msg string) error {
 	m := outgoingMessage{
 		From: outgoingUser{
 			ID:    from.ID,
 			Name:  from.Name,
 			Nonce: fromNonce,
 		},
-		Msg: msg,
+		Encrypted: encrypted,
+		Msg:       msg,
 	}
 
 	if err := to.Conn.WriteJSON(m); err != nil {

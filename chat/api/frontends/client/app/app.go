@@ -2,7 +2,12 @@
 package app
 
 import (
+	"crypto/rand"
+	"crypto/rsa"
+	"crypto/x509"
 	"encoding/json"
+	"encoding/pem"
+	"errors"
 	"fmt"
 	"math/big"
 	"strings"
@@ -45,6 +50,7 @@ type UI interface {
 
 type outgoingMessage struct {
 	ToID      common.Address `json:"toID"`
+	Encrypted bool           `json:"encrypted"`
 	Msg       string         `json:"msg"`
 	FromNonce uint64         `json:"fromNonce"`
 	V         *big.Int       `json:"v"`
@@ -59,8 +65,9 @@ type usr struct {
 }
 
 type incomingMessage struct {
-	From usr    `json:"from"`
-	Msg  string `json:"msg"`
+	From      usr    `json:"from"`
+	Encrypted bool   `json:"encrypted"`
+	Msg       string `json:"msg"`
 }
 
 // =============================================================================
@@ -193,15 +200,15 @@ func (app *App) ReceiveCapMessage(conn *websocket.Conn) {
 
 		// ---------------------------------------------------------------------
 
-		inMsg, err = app.preprocessRecvMessage(inMsg)
+		decryptedMsg, _, err := app.preprocessRecvMessage(inMsg)
 		if err != nil {
-			app.ui.WriteText("system", fmt.Sprintf("preprocessed: %s: %s", inMsg.Msg, err))
+			app.ui.WriteText("system", fmt.Sprintf("preprocess message: %s", err))
 			return
 		}
 
 		// ---------------------------------------------------------------------
 
-		fm := formatMessage(user.Name, inMsg.Msg)
+		fm := formatMessage(user.Name, decryptedMsg)
 
 		if err := app.db.InsertMessage(inMsg.From.ID, fm); err != nil {
 			app.ui.WriteText("system", fmt.Sprintf("add message: %s", err))
@@ -230,9 +237,17 @@ func (app *App) SendMessageHandler(to common.Address, msg string) error {
 
 	nonce := usr.AppLastNonce + 1
 
-	msg, err = app.preprocessSendMessage(msg)
+	decryptedMsg, encryptedMsg, err := app.preprocessSendMessage(usr, msg)
 	if err != nil {
 		return fmt.Errorf("preprocess message: %w", err)
+	}
+
+	msg = decryptedMsg
+
+	var encrypted bool
+	if encryptedMsg != "" {
+		encrypted = true
+		msg = encryptedMsg
 	}
 
 	// -------------------------------------------------------------------------
@@ -254,6 +269,7 @@ func (app *App) SendMessageHandler(to common.Address, msg string) error {
 
 	outMsg := outgoingMessage{
 		ToID:      to,
+		Encrypted: encrypted,
 		Msg:       msg,
 		FromNonce: nonce,
 		V:         v,
@@ -276,13 +292,13 @@ func (app *App) SendMessageHandler(to common.Address, msg string) error {
 		return fmt.Errorf("update app nonce: %w", err)
 	}
 
-	msg = formatMessage("You", msg)
+	// -------------------------------------------------------------------------
+
+	msg = formatMessage("You", decryptedMsg)
 
 	if err := app.db.InsertMessage(to, msg); err != nil {
 		return fmt.Errorf("add message: %w", err)
 	}
-
-	// -------------------------------------------------------------------------
 
 	app.ui.WriteText(to.Hex(), msg)
 
@@ -291,41 +307,76 @@ func (app *App) SendMessageHandler(to common.Address, msg string) error {
 
 // =============================================================================
 
-func (app *App) preprocessRecvMessage(inMsg incomingMessage) (incomingMessage, error) {
+func (app *App) preprocessRecvMessage(inMsg incomingMessage) (string, string, error) {
 	msg := inMsg.Msg
 
+	// -------------------------------------------------------------------------
+	// Process Normal Message
+
 	if msg[0] != '/' {
-		return inMsg, nil
+		if !inMsg.Encrypted {
+			return msg, "", nil
+		}
+
+		decryptedData, err := rsa.DecryptPKCS1v15(rand.Reader, app.id.PrivKeyRSA, []byte(msg))
+		if err != nil {
+			return "", "", fmt.Errorf("encrypting message: %w", err)
+		}
+
+		return string(decryptedData), inMsg.Msg, nil
 	}
+
+	// -------------------------------------------------------------------------
+	// Process Commands
 
 	parts := strings.Split(msg[1:], " ")
 	if len(parts) < 2 {
-		return incomingMessage{}, fmt.Errorf("invalid command format: parts: %d", len(parts))
+		return "", "", fmt.Errorf("invalid command format: parts: %d", len(parts))
 	}
 
 	switch parts[0] {
 	case "key":
 		if err := app.db.UpdateContactKey(inMsg.From.ID, msg[5:]); err != nil {
-			return incomingMessage{}, fmt.Errorf("updating key: %w", err)
+			return "", "", fmt.Errorf("updating key: %w", err)
 		}
-		inMsg.Msg = "** updated contact's key **"
-		return inMsg, nil
+		return "** updated contact's key **", "", nil
 	}
 
-	return incomingMessage{}, fmt.Errorf("unknown command")
+	return "", "", fmt.Errorf("unknown command")
 }
 
-func (app *App) preprocessSendMessage(msg string) (string, error) {
+func (app *App) preprocessSendMessage(usr User, msg string) (string, string, error) {
+
+	// -------------------------------------------------------------------------
+	// Process Normal Message
+
 	if msg[0] != '/' {
-		return msg, nil
+		if usr.Key == "" {
+			return msg, "", nil
+		}
+
+		publicKey, err := getPublicKey(usr.Key)
+		if err != nil {
+			return "", "", fmt.Errorf("unable to read public key")
+		}
+
+		encryptedData, err := rsa.EncryptPKCS1v15(rand.Reader, publicKey, []byte(msg))
+		if err != nil {
+			return "", "", fmt.Errorf("encrypting message: %w", err)
+		}
+
+		return msg, string(encryptedData), nil
 	}
+
+	// -------------------------------------------------------------------------
+	// Process Commands
 
 	msg = strings.TrimSpace(msg)
 	msg = strings.ToLower(msg)
 
 	parts := strings.Split(msg[1:], " ")
 	if len(parts) != 2 {
-		return "", fmt.Errorf("invalid command format")
+		return "", "", fmt.Errorf("invalid command format")
 	}
 
 	switch parts[0] {
@@ -333,12 +384,28 @@ func (app *App) preprocessSendMessage(msg string) (string, error) {
 		switch parts[1] {
 		case "key":
 			if app.id.PubKeyRSA == "" {
-				return "", fmt.Errorf("no key to share")
+				return "", "", fmt.Errorf("no key to share")
 			}
 
-			return fmt.Sprintf("/key %s", app.id.PubKeyRSA), nil
+			return fmt.Sprintf("/key %s", app.id.PubKeyRSA), "", nil
 		}
 	}
 
-	return "", fmt.Errorf("unknown command")
+	return "", "", fmt.Errorf("unknown command")
+}
+
+// =============================================================================
+
+func getPublicKey(pemBlock string) (*rsa.PublicKey, error) {
+	block, _ := pem.Decode([]byte(pemBlock))
+	if block == nil {
+		return nil, errors.New("invalid key: Key must be a PEM encoded PKCS1 or PKCS8 key")
+	}
+
+	publicKey, err := x509.ParsePKCS1PublicKey(block.Bytes)
+	if err != nil {
+		return nil, fmt.Errorf("parse public key: %w", err)
+	}
+
+	return publicKey, nil
 }

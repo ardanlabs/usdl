@@ -24,9 +24,9 @@ import (
 )
 
 /*
-	DataStar Client (Thursday)
+	DataStar Client (Tuesday)
 	Encryption
-		- Sharing the public key
+		- Implement the actual encryption
 	Private Stream
 		- Read stream name from config else "general"
 	Datafile transfer
