@@ -28,7 +28,7 @@ type Connection struct {
 type incomingMessage struct {
 	ToID      common.Address `json:"toID"`
 	Encrypted bool           `json:"encrypted"`
-	Msg       string         `json:"msg"`
+	Msg       []byte         `json:"msg"`
 	FromNonce uint64         `json:"fromNonce"`
 	V         *big.Int       `json:"v"`
 	R         *big.Int       `json:"r"`
@@ -44,7 +44,7 @@ type outgoingUser struct {
 type outgoingMessage struct {
 	From      outgoingUser `json:"from"`
 	Encrypted bool         `json:"encrypted"`
-	Msg       string       `json:"msg"`
+	Msg       []byte       `json:"msg"`
 }
 
 type busMessage struct {

@@ -135,27 +135,27 @@ func flushDBToDisk(df dataFile) error {
 	return nil
 }
 
-func readMsgsFromDisk(id common.Address) ([]string, error) {
+func readMsgsFromDisk(id common.Address) ([][]byte, error) {
 	fileName := filepath.Join(dbMsgsDir, id.Hex()+".msg")
 
 	f, err := os.Open(fileName)
 	if err != nil {
-		return []string{}, nil
+		return nil, nil
 	}
 	defer f.Close()
 
-	var msgs []string
+	var msgs [][]byte
 
 	scanner := bufio.NewScanner(f)
 	for scanner.Scan() {
-		s := scanner.Text()
-		msgs = append(msgs, s)
+		b := scanner.Bytes()
+		msgs = append(msgs, b)
 	}
 
 	return msgs, nil
 }
 
-func flushMsgToDisk(id common.Address, msg string) error {
+func flushMsgToDisk(id common.Address, msg []byte) error {
 	fileName := filepath.Join(dbMsgsDir, id.Hex()+".msg")
 
 	var f *os.File
@@ -178,7 +178,11 @@ func flushMsgToDisk(id common.Address, msg string) error {
 
 	defer f.Close()
 
-	if _, err := f.WriteString(msg + "\n"); err != nil {
+	if _, err := f.Write(msg); err != nil {
+		return fmt.Errorf("message file write: %w", err)
+	}
+
+	if _, err := f.WriteString("\n"); err != nil {
 		return fmt.Errorf("message file write: %w", err)
 	}
 

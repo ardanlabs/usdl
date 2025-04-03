@@ -123,7 +123,7 @@ func (db *DB) InsertContact(id common.Address, name string) (app.User, error) {
 	return u, nil
 }
 
-func (db *DB) InsertMessage(id common.Address, msg string) error {
+func (db *DB) InsertMessage(id common.Address, msg []byte) error {
 	db.mu.Lock()
 	defer db.mu.Unlock()
 

@@ -2,6 +2,6 @@ package app
 
 import "fmt"
 
-func formatMessage(name string, msg string) string {
-	return fmt.Sprintf("%s: %s", name, msg)
+func formatMessage(name string, msg []byte) []byte {
+	return []byte(fmt.Sprintf("%s: %s", name, string(msg)))
 }

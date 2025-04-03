@@ -10,7 +10,7 @@ import (
 )
 
 type App interface {
-	SendMessageHandler(to common.Address, msg string) error
+	SendMessageHandler(to common.Address, msg []byte) error
 }
 
 type Storage interface {
@@ -71,7 +71,7 @@ func New(myAccountID common.Address, db Storage) *TUI {
 		}
 
 		for i, msg := range user.Messages {
-			fmt.Fprintln(textView, msg)
+			fmt.Fprintln(textView, string(msg))
 			if i < len(user.Messages)-1 {
 				fmt.Fprintln(textView, "-----")
 			}
@@ -166,13 +166,13 @@ func (ui *TUI) Run() error {
 	return ui.tviewApp.SetRoot(ui.flex, true).EnableMouse(true).Run()
 }
 
-func (ui *TUI) WriteText(id string, msg string) {
+func (ui *TUI) WriteText(id string, msg []byte) {
 	ui.textView.ScrollToEnd()
 
 	switch id {
 	case "system":
 		fmt.Fprintln(ui.textView, "-----")
-		fmt.Fprintln(ui.textView, msg)
+		fmt.Fprintln(ui.textView, string(msg))
 
 	default:
 		idx := ui.list.GetCurrentItem()
@@ -186,7 +186,7 @@ func (ui *TUI) WriteText(id string, msg string) {
 
 		if id == currentID {
 			fmt.Fprintln(ui.textView, "-----")
-			fmt.Fprintln(ui.textView, msg)
+			fmt.Fprintln(ui.textView, string(msg))
 			return
 		}
 
@@ -218,8 +218,8 @@ func (ui *TUI) buttonHandler() {
 
 	id := common.HexToAddress(to)
 
-	if err := ui.app.SendMessageHandler(id, msg); err != nil {
-		ui.WriteText("system", fmt.Sprintf("Error sending message: %s", err))
+	if err := ui.app.SendMessageHandler(id, []byte(msg)); err != nil {
+		ui.WriteText("system", []byte(fmt.Sprintf("Error sending message: %s", err)))
 		return
 	}
 

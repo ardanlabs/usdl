@@ -170,7 +170,7 @@ func (c *Chat) ListenClient(ctx context.Context, from User) {
 
 		dataThatWasSign := struct {
 			ToID      common.Address
-			Msg       string
+			Msg       []byte
 			FromNonce uint64
 		}{
 			ToID:      inMsg.ToID,
@@ -235,7 +235,7 @@ func (c *Chat) listenBus() func(msg jetstream.Msg) {
 
 		dataThatWasSign := struct {
 			ToID      common.Address
-			Msg       string
+			Msg       []byte
 			FromNonce uint64
 		}{
 			ToID:      busMsg.ToID,
@@ -346,7 +346,7 @@ func (c *Chat) readMessage(ctx context.Context, usr User) ([]byte, error) {
 	return resp.msg, nil
 }
 
-func (c *Chat) sendMessageClient(from User, to User, fromNonce uint64, encrypted bool, msg string) error {
+func (c *Chat) sendMessageClient(from User, to User, fromNonce uint64, encrypted bool, msg []byte) error {
 	m := outgoingMessage{
 		From: outgoingUser{
 			ID:    from.ID,
