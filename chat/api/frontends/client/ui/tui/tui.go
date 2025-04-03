@@ -219,7 +219,7 @@ func (ui *TUI) buttonHandler() {
 	id := common.HexToAddress(to)
 
 	if err := ui.app.SendMessageHandler(id, []byte(msg)); err != nil {
-		ui.WriteText("system", []byte(fmt.Sprintf("Error sending message: %s", err)))
+		ui.WriteText("system", fmt.Appendf(nil, "Error sending message: %s", err))
 		return
 	}
 

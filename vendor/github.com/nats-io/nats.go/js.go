@@ -3499,7 +3499,7 @@ func (m *Msg) ackReply(ackType []byte, sync bool, opts ...AckOpt) error {
 	var err error
 	// This will be > 0 only when called from NakWithDelay()
 	if o.nakDelay > 0 {
-		body = []byte(fmt.Sprintf("%s {\"delay\": %d}", ackType, o.nakDelay.Nanoseconds()))
+		body = fmt.Appendf(nil, "%s {\"delay\": %d}", ackType, o.nakDelay.Nanoseconds())
 	} else {
 		body = ackType
 	}

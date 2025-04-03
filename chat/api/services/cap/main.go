@@ -26,7 +26,10 @@ import (
 /*
 	DataStar Client (Tuesday)
 	Encryption
-		- Implement the actual encryption
+		- Have encryption working
+		- Writing encryped messages to disk
+		- WE NEED to decrypt from disk on startup
+		- WE NEED marker to know
 	Private Stream
 		- Read stream name from config else "general"
 	Datafile transfer
