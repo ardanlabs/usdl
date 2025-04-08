@@ -11,9 +11,6 @@ import (
 
 type App interface {
 	SendMessageHandler(to common.Address, msg []byte) error
-}
-
-type Storage interface {
 	Contacts() []app.User
 	QueryContactByID(id common.Address) (app.User, error)
 }
@@ -28,13 +25,12 @@ type TUI struct {
 	textArea *tview.TextArea
 	button   *tview.Button
 	app      App
-	db       Storage
 }
 
-func New(myAccountID common.Address, db Storage) *TUI {
+func New(myAccountID common.Address) *TUI {
 	var ui TUI
 
-	app := tview.NewApplication()
+	tApp := tview.NewApplication()
 
 	// -------------------------------------------------------------------------
 
@@ -42,7 +38,7 @@ func New(myAccountID common.Address, db Storage) *TUI {
 		SetTextAlign(tview.AlignLeft).
 		SetWordWrap(true).
 		SetChangedFunc(func() {
-			app.Draw()
+			tApp.Draw()
 		})
 
 	textView.SetBorder(true)
@@ -62,7 +58,7 @@ func New(myAccountID common.Address, db Storage) *TUI {
 
 		addrID := common.HexToAddress(id)
 
-		user, err := ui.db.QueryContactByID(addrID)
+		user, err := ui.app.QueryContactByID(addrID)
 		if err != nil {
 			textView.ScrollToEnd()
 			fmt.Fprintln(textView, "-----")
@@ -79,11 +75,6 @@ func New(myAccountID common.Address, db Storage) *TUI {
 
 		list.SetItemText(idx, user.Name, user.ID.Hex())
 	})
-
-	for i, user := range db.Contacts() {
-		shortcut := rune(i + 49)
-		list.AddItem(user.Name, user.ID.Hex(), shortcut, nil)
-	}
 
 	// -------------------------------------------------------------------------
 
@@ -118,20 +109,19 @@ func New(myAccountID common.Address, db Storage) *TUI {
 	flex.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
 		switch event.Key() {
 		case tcell.KeyEscape, tcell.KeyCtrlQ:
-			app.Stop()
+			tApp.Stop()
 			return nil
 		}
 
 		return event
 	})
 
-	ui.tviewApp = app
+	ui.tviewApp = tApp
 	ui.flex = flex
 	ui.list = list
 	ui.textView = textView
 	ui.textArea = textArea
 	ui.button = button
-	ui.db = db
 
 	button.SetSelectedFunc(ui.buttonHandler)
 
@@ -150,16 +140,10 @@ func New(myAccountID common.Address, db Storage) *TUI {
 func (ui *TUI) SetApp(app App) {
 	ui.app = app
 
-	// We need to get the change function to execute, so remove the last
-	// items and add it back.
-
-	lastItem := ui.list.GetItemCount() - 1
-	main, secondary := ui.list.GetItemText(lastItem)
-	ui.list.RemoveItem(lastItem)
-	shortcut := rune(ui.list.GetItemCount() + 49)
-	ui.list.AddItem(main, secondary, shortcut, nil)
-	ui.list.SetCurrentItem(lastItem)
-	ui.list.SetCurrentItem(0)
+	for i, user := range app.Contacts() {
+		shortcut := rune(i + 49)
+		ui.list.AddItem(user.Name, user.ID.Hex(), shortcut, nil)
+	}
 }
 
 func (ui *TUI) Run() error {

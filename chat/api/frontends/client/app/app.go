@@ -38,6 +38,7 @@ type User struct {
 }
 
 type Storage interface {
+	Contacts() []User
 	QueryContactByID(id common.Address) (User, error)
 	InsertContact(id common.Address, name string) (User, error)
 	InsertMessage(id common.Address, msg Message) error
@@ -322,6 +323,33 @@ func (app *App) SendMessageHandler(to common.Address, msg []byte) error {
 	return nil
 }
 
+func (app *App) Contacts() []User {
+	return app.db.Contacts()
+}
+
+func (app *App) QueryContactByID(id common.Address) (User, error) {
+	usr, err := app.db.QueryContactByID(id)
+	if err != nil {
+		return User{}, err
+	}
+
+	for i, msg := range usr.Messages {
+		if msg.Encrypted {
+			decryptedData, err := rsa.DecryptPKCS1v15(rand.Reader, app.id.PrivKeyRSA, []byte(msg.Content))
+			if err != nil {
+				return User{}, fmt.Errorf("decrypting message: %w", err)
+			}
+
+			msg.Content = decryptedData
+			msg.Encrypted = false
+
+			usr.Messages[i] = msg
+		}
+	}
+
+	return usr, nil
+}
+
 // =============================================================================
 
 func (app *App) preprocessRecvMessage(inMsg incomingMessage) (onStorage []byte, onScreen []byte, err error) {
@@ -337,7 +365,7 @@ func (app *App) preprocessRecvMessage(inMsg incomingMessage) (onStorage []byte, 
 
 		decryptedData, err := rsa.DecryptPKCS1v15(rand.Reader, app.id.PrivKeyRSA, []byte(msg))
 		if err != nil {
-			return nil, nil, fmt.Errorf("encrypting message: %w", err)
+			return nil, nil, fmt.Errorf("decrypting message: %w", err)
 		}
 
 		return inMsg.Msg, decryptedData, nil
