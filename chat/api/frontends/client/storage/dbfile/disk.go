@@ -22,6 +22,12 @@ var (
 	dbFile    string
 )
 
+type message struct {
+	Name      string `json:"name"`
+	Encrypted bool   `json:"encrypted"`
+	Content   []byte `json:"content"`
+}
+
 type myAccount struct {
 	ID   common.Address `json:"id"`
 	Name string         `json:"name"`
@@ -135,7 +141,7 @@ func flushDBToDisk(df dataFile) error {
 	return nil
 }
 
-func readMsgsFromDisk(id common.Address) ([][]byte, error) {
+func readMsgsFromDisk(id common.Address) ([]message, error) {
 	fileName := filepath.Join(dbMsgsDir, id.Hex()+".msg")
 
 	f, err := os.Open(fileName)
@@ -144,18 +150,22 @@ func readMsgsFromDisk(id common.Address) ([][]byte, error) {
 	}
 	defer f.Close()
 
-	var msgs [][]byte
+	var msgs []message
 
 	scanner := bufio.NewScanner(f)
 	for scanner.Scan() {
-		b := scanner.Bytes()
-		msgs = append(msgs, b)
+		var msg message
+		if err := json.Unmarshal(scanner.Bytes(), &msg); err != nil {
+			return nil, fmt.Errorf("unmarshal: %w", err)
+		}
+
+		msgs = append(msgs, msg)
 	}
 
 	return msgs, nil
 }
 
-func flushMsgToDisk(id common.Address, msg []byte) error {
+func flushMsgToDisk(id common.Address, msg message) error {
 	fileName := filepath.Join(dbMsgsDir, id.Hex()+".msg")
 
 	var f *os.File
@@ -178,7 +188,12 @@ func flushMsgToDisk(id common.Address, msg []byte) error {
 
 	defer f.Close()
 
-	if _, err := f.Write(msg); err != nil {
+	data, err := json.Marshal(msg)
+	if err != nil {
+		return fmt.Errorf("message marshal: %w", err)
+	}
+
+	if _, err := f.Write(data); err != nil {
 		return fmt.Errorf("message file write: %w", err)
 	}
 

@@ -76,7 +76,11 @@ func (db *DB) QueryContactByID(id common.Address) (app.User, error) {
 			return app.User{}, fmt.Errorf("read messages: %w", err)
 		}
 
-		u.Messages = msgs
+		u.Messages = make([]app.Message, len(msgs))
+		for i, msg := range msgs {
+			u.Messages[i] = app.Message(msg)
+		}
+
 		db.contacts[id] = u
 	}
 
@@ -123,7 +127,7 @@ func (db *DB) InsertContact(id common.Address, name string) (app.User, error) {
 	return u, nil
 }
 
-func (db *DB) InsertMessage(id common.Address, msg []byte) error {
+func (db *DB) InsertMessage(id common.Address, msg app.Message) error {
 	db.mu.Lock()
 	defer db.mu.Unlock()
 
@@ -135,7 +139,7 @@ func (db *DB) InsertMessage(id common.Address, msg []byte) error {
 	u.Messages = append(u.Messages, msg)
 	db.contacts[id] = u
 
-	if err := flushMsgToDisk(id, msg); err != nil {
+	if err := flushMsgToDisk(id, message(msg)); err != nil {
 		return fmt.Errorf("write message: %w", err)
 	}
 
