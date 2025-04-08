@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 )
@@ -23,9 +24,10 @@ var (
 )
 
 type message struct {
-	Name      string `json:"name"`
-	Encrypted bool   `json:"encrypted"`
-	Content   []byte `json:"content"`
+	Name        string    `json:"name"`
+	Encrypted   bool      `json:"encrypted"`
+	Content     []byte    `json:"content"`
+	DateCreated time.Time `json:"date_created"`
 }
 
 type myAccount struct {

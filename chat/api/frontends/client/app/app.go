@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"math/big"
 	"strings"
+	"time"
 
 	"github.com/ardanlabs/usdl/chat/foundation/signature"
 	"github.com/ethereum/go-ethereum/common"
@@ -23,8 +24,9 @@ type MyAccount struct {
 }
 
 type Message struct {
-	Name    string
-	Content []byte
+	Name        string
+	Content     []byte
+	DateCreated time.Time
 }
 
 type User struct {

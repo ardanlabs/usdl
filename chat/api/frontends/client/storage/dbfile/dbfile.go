@@ -3,6 +3,7 @@ package dbfile
 import (
 	"fmt"
 	"sync"
+	"time"
 
 	"github.com/ardanlabs/usdl/chat/api/frontends/client/app"
 	"github.com/ethereum/go-ethereum/common"
@@ -79,8 +80,9 @@ func (db *DB) QueryContactByID(id common.Address) (app.User, error) {
 		u.Messages = make([]app.Message, len(msgs))
 		for i, msg := range msgs {
 			u.Messages[i] = app.Message{
-				Name:    msg.Name,
-				Content: msg.Content,
+				Name:        msg.Name,
+				Content:     msg.Content,
+				DateCreated: msg.DateCreated.Local(),
 			}
 		}
 
@@ -143,8 +145,9 @@ func (db *DB) InsertMessage(id common.Address, msg app.Message) error {
 	db.contacts[id] = u
 
 	m := message{
-		Name:    msg.Name,
-		Content: msg.Content,
+		Name:        msg.Name,
+		Content:     msg.Content,
+		DateCreated: time.Now().UTC(),
 	}
 
 	if err := flushMsgToDisk(id, m); err != nil {

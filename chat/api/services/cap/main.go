@@ -24,20 +24,23 @@ import (
 )
 
 /*
-	DataStar Client (Tuesday)
-	Encryption
-		- Have encryption working
-		- Writing encryped messages to disk
-		- WE NEED to decrypt from disk on startup
-		- WE NEED marker to know
-	Private Stream
-		- Read stream name from config else "general"
-	Datafile transfer
-		- Private stream
+	DataStar Client (Thursday)
+
 	AI agent mode
 		- Ollama model server
+
+	Private Stream
+		- Between 2 people
+		- Same stream providing message caching
+		- The name is random but predictable
+			- Provide a default name in config
+
 	Group Chat
 		- Allow users to create groups
+
+	Datafile transfer
+		- Private stream
+
 	Refactor client
 		- Date/Time stamps on messages
 		- Clear history button
