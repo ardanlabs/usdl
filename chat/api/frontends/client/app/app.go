@@ -307,7 +307,7 @@ func (app *App) SendMessageHandler(to common.Address, msg []byte) error {
 
 	if msg[0] != '/' {
 		msg := Message{
-			Name:      usr.Name,
+			Name:      "You",
 			Encrypted: encrypted,
 			Content:   onStorage,
 		}
