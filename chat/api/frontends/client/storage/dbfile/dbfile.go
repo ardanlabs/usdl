@@ -78,7 +78,10 @@ func (db *DB) QueryContactByID(id common.Address) (app.User, error) {
 
 		u.Messages = make([]app.Message, len(msgs))
 		for i, msg := range msgs {
-			u.Messages[i] = app.Message(msg)
+			u.Messages[i] = app.Message{
+				Name:    msg.Name,
+				Content: msg.Content,
+			}
 		}
 
 		db.contacts[id] = u
@@ -139,7 +142,12 @@ func (db *DB) InsertMessage(id common.Address, msg app.Message) error {
 	u.Messages = append(u.Messages, msg)
 	db.contacts[id] = u
 
-	if err := flushMsgToDisk(id, message(msg)); err != nil {
+	m := message{
+		Name:    msg.Name,
+		Content: msg.Content,
+	}
+
+	if err := flushMsgToDisk(id, m); err != nil {
 		return fmt.Errorf("write message: %w", err)
 	}
 

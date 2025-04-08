@@ -23,9 +23,8 @@ type MyAccount struct {
 }
 
 type Message struct {
-	Name      string
-	Encrypted bool
-	Content   []byte
+	Name    string
+	Content []byte
 }
 
 type User struct {
@@ -207,7 +206,7 @@ func (app *App) ReceiveCapMessage(conn *websocket.Conn) {
 
 		// ---------------------------------------------------------------------
 
-		onStorage, onScreen, err := app.preprocessRecvMessage(inMsg)
+		msg, err := app.preprocessRecvMessage(inMsg)
 		if err != nil {
 			app.ui.WriteText("system", errorMessage("preprocess message: %s", err))
 			return
@@ -217,9 +216,8 @@ func (app *App) ReceiveCapMessage(conn *websocket.Conn) {
 
 		if inMsg.Msg[0] != '/' {
 			msg := Message{
-				Name:      inMsg.From.Name,
-				Encrypted: inMsg.Encrypted,
-				Content:   onStorage,
+				Name:    inMsg.From.Name,
+				Content: msg,
 			}
 
 			if err := app.db.InsertMessage(inMsg.From.ID, msg); err != nil {
@@ -227,7 +225,6 @@ func (app *App) ReceiveCapMessage(conn *websocket.Conn) {
 				return
 			}
 
-			msg.Content = onScreen
 			app.ui.WriteText(inMsg.From.ID.Hex(), msg)
 		}
 	}
@@ -251,7 +248,7 @@ func (app *App) SendMessageHandler(to common.Address, msg []byte) error {
 
 	nonce := usr.AppLastNonce + 1
 
-	onStorage, onScreen, err := app.preprocessSendMessage(usr, msg)
+	onWire, onScreen, err := app.preprocessSendMessage(usr, msg)
 	if err != nil {
 		return fmt.Errorf("preprocess message: %w", err)
 	}
@@ -264,7 +261,7 @@ func (app *App) SendMessageHandler(to common.Address, msg []byte) error {
 		FromNonce uint64
 	}{
 		ToID:      to,
-		Msg:       onStorage,
+		Msg:       onWire,
 		FromNonce: nonce,
 	}
 
@@ -281,7 +278,7 @@ func (app *App) SendMessageHandler(to common.Address, msg []byte) error {
 	outMsg := outgoingMessage{
 		ToID:      to,
 		Encrypted: encrypted,
-		Msg:       onStorage,
+		Msg:       onWire,
 		FromNonce: nonce,
 		V:         v,
 		R:         r,
@@ -307,16 +304,14 @@ func (app *App) SendMessageHandler(to common.Address, msg []byte) error {
 
 	if msg[0] != '/' {
 		msg := Message{
-			Name:      "You",
-			Encrypted: encrypted,
-			Content:   onStorage,
+			Name:    "You",
+			Content: onScreen,
 		}
 
 		if err := app.db.InsertMessage(to, msg); err != nil {
 			return fmt.Errorf("add message: %w", err)
 		}
 
-		msg.Content = onScreen
 		app.ui.WriteText(to.Hex(), msg)
 	}
 
@@ -328,31 +323,12 @@ func (app *App) Contacts() []User {
 }
 
 func (app *App) QueryContactByID(id common.Address) (User, error) {
-	usr, err := app.db.QueryContactByID(id)
-	if err != nil {
-		return User{}, err
-	}
-
-	for i, msg := range usr.Messages {
-		if msg.Encrypted {
-			decryptedData, err := rsa.DecryptPKCS1v15(rand.Reader, app.id.PrivKeyRSA, []byte(msg.Content))
-			if err != nil {
-				return User{}, fmt.Errorf("decrypting message: %w", err)
-			}
-
-			msg.Content = decryptedData
-			msg.Encrypted = false
-
-			usr.Messages[i] = msg
-		}
-	}
-
-	return usr, nil
+	return app.db.QueryContactByID(id)
 }
 
 // =============================================================================
 
-func (app *App) preprocessRecvMessage(inMsg incomingMessage) (onStorage []byte, onScreen []byte, err error) {
+func (app *App) preprocessRecvMessage(inMsg incomingMessage) ([]byte, error) {
 	msg := inMsg.Msg
 
 	// -------------------------------------------------------------------------
@@ -360,15 +336,15 @@ func (app *App) preprocessRecvMessage(inMsg incomingMessage) (onStorage []byte, 
 
 	if msg[0] != '/' {
 		if !inMsg.Encrypted {
-			return msg, msg, nil
+			return msg, nil
 		}
 
 		decryptedData, err := rsa.DecryptPKCS1v15(rand.Reader, app.id.PrivKeyRSA, []byte(msg))
 		if err != nil {
-			return nil, nil, fmt.Errorf("decrypting message: %w", err)
+			return nil, fmt.Errorf("decrypting message: %w", err)
 		}
 
-		return inMsg.Msg, decryptedData, nil
+		return decryptedData, nil
 	}
 
 	// -------------------------------------------------------------------------
@@ -378,21 +354,21 @@ func (app *App) preprocessRecvMessage(inMsg incomingMessage) (onStorage []byte, 
 
 	parts := strings.Split(msgStr[1:], " ")
 	if len(parts) < 2 {
-		return nil, nil, fmt.Errorf("invalid command format: parts: %d", len(parts))
+		return nil, fmt.Errorf("invalid command format: parts: %d", len(parts))
 	}
 
 	switch parts[0] {
 	case "key":
 		if err := app.db.UpdateContactKey(inMsg.From.ID, msgStr[5:]); err != nil {
-			return nil, nil, fmt.Errorf("updating key: %w", err)
+			return nil, fmt.Errorf("updating key: %w", err)
 		}
-		return []byte("** updated contact's key **"), []byte("** updated contact's key **"), nil
+		return []byte("** updated contact's key **"), nil
 	}
 
-	return nil, nil, fmt.Errorf("unknown command")
+	return nil, fmt.Errorf("unknown command")
 }
 
-func (app *App) preprocessSendMessage(usr User, msg []byte) (onStorage []byte, onScreen []byte, err error) {
+func (app *App) preprocessSendMessage(usr User, msg []byte) (onWire []byte, onScreen []byte, err error) {
 
 	// -------------------------------------------------------------------------
 	// Process Normal Message
