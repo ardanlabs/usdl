@@ -2,6 +2,7 @@ package dbfile
 
 import (
 	"fmt"
+	"sort"
 	"sync"
 	"time"
 
@@ -58,6 +59,10 @@ func (c *DB) Contacts() []app.User {
 	for _, user := range c.contacts {
 		users = append(users, user)
 	}
+
+	sort.Slice(users, func(i, j int) bool {
+		return users[i].Name <= users[j].Name
+	})
 
 	return users
 }

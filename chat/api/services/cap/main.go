@@ -42,7 +42,6 @@ import (
 		- Private stream
 
 	Refactor client
-		- Date/Time stamps on messages
 		- Clear history button
 */
 
