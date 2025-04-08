@@ -1,5 +1,5 @@
-// Package chat provides supports for chat activity.
-package chat
+// Package chatbus provides supports for chat activity.
+package chatbus
 
 import (
 	"context"
@@ -27,8 +27,8 @@ var (
 	ErrNotExists = fmt.Errorf("user doesn't exists")
 )
 
-// Users defines the set of behavior for user management.
-type Users interface {
+// Storer defines the set of behavior for user management.
+type Storer interface {
 	Add(ctx context.Context, usr User) error
 	UpdateLastPing(ctx context.Context, userID common.Address) error
 	UpdateLastPong(ctx context.Context, userID common.Address) (User, error)
@@ -37,19 +37,19 @@ type Users interface {
 	Retrieve(ctx context.Context, userID common.Address) (User, error)
 }
 
-// Chat represents a chat support.
-type Chat struct {
+// Business represents a chat support.
+type Business struct {
 	log      *logger.Logger
 	js       jetstream.JetStream
 	stream   jetstream.Stream
 	consumer jetstream.Consumer
 	capID    uuid.UUID
 	subject  string
-	users    Users
+	storer   Storer
 }
 
-// New creates a new chat support.
-func New(log *logger.Logger, conn *nats.Conn, subject string, users Users, capID uuid.UUID) (*Chat, error) {
+// NewBusiness creates a new chat support.
+func NewBusiness(log *logger.Logger, conn *nats.Conn, users Storer, subject string, capID uuid.UUID) (*Business, error) {
 	ctx := context.TODO()
 
 	js, err := jetstream.New(conn)
@@ -77,14 +77,14 @@ func New(log *logger.Logger, conn *nats.Conn, subject string, users Users, capID
 		return nil, fmt.Errorf("nats create consumer: %w", err)
 	}
 
-	c := Chat{
+	c := Business{
 		log:      log,
 		js:       js,
 		stream:   s1,
 		consumer: c1,
 		capID:    capID,
 		subject:  subject,
-		users:    users,
+		storer:   users,
 	}
 
 	c1.Consume(c.listenBus(), jetstream.PullMaxMessages(1))
@@ -96,7 +96,7 @@ func New(log *logger.Logger, conn *nats.Conn, subject string, users Users, capID
 }
 
 // Handshake performs the connection handshake protocol.
-func (c *Chat) Handshake(ctx context.Context, w http.ResponseWriter, r *http.Request) (User, error) {
+func (c *Business) Handshake(ctx context.Context, w http.ResponseWriter, r *http.Request) (User, error) {
 	var ws websocket.Upgrader
 	conn, err := ws.Upgrade(w, r, nil)
 	if err != nil {
@@ -127,7 +127,7 @@ func (c *Chat) Handshake(ctx context.Context, w http.ResponseWriter, r *http.Req
 
 	// -------------------------------------------------------------------------
 
-	if err := c.users.Add(ctx, usr); err != nil {
+	if err := c.storer.Add(ctx, usr); err != nil {
 		defer conn.Close()
 		if err := conn.WriteMessage(websocket.TextMessage, []byte("Already Connected")); err != nil {
 			return User{}, fmt.Errorf("write message: %w", err)
@@ -150,7 +150,7 @@ func (c *Chat) Handshake(ctx context.Context, w http.ResponseWriter, r *http.Req
 }
 
 // ListenClient waits for messages from users.
-func (c *Chat) ListenClient(ctx context.Context, from User) {
+func (c *Business) ListenClient(ctx context.Context, from User) {
 	for {
 		msg, err := c.readMessage(ctx, from)
 		if err != nil {
@@ -189,7 +189,7 @@ func (c *Chat) ListenClient(ctx context.Context, from User) {
 			continue
 		}
 
-		to, err := c.users.Retrieve(ctx, inMsg.ToID)
+		to, err := c.storer.Retrieve(ctx, inMsg.ToID)
 		if err != nil {
 			switch {
 			case errors.Is(err, ErrNotExists):
@@ -215,7 +215,7 @@ func (c *Chat) ListenClient(ctx context.Context, from User) {
 
 // =============================================================================
 
-func (c *Chat) listenBus() func(msg jetstream.Msg) {
+func (c *Business) listenBus() func(msg jetstream.Msg) {
 	ctx := web.SetTraceID(context.Background(), uuid.New())
 
 	f := func(msg jetstream.Msg) {
@@ -254,7 +254,7 @@ func (c *Chat) listenBus() func(msg jetstream.Msg) {
 			return
 		}
 
-		to, err := c.users.Retrieve(ctx, busMsg.ToID)
+		to, err := c.storer.Retrieve(ctx, busMsg.ToID)
 		if err != nil {
 			switch {
 			case errors.Is(err, ErrNotExists):
@@ -282,7 +282,7 @@ func (c *Chat) listenBus() func(msg jetstream.Msg) {
 	return f
 }
 
-func (c *Chat) isCriticalError(ctx context.Context, err error) bool {
+func (c *Business) isCriticalError(ctx context.Context, err error) bool {
 	switch e := err.(type) {
 	case *websocket.CloseError:
 		c.log.Info(ctx, "chat-isCriticalError", "status", "client disconnected")
@@ -311,7 +311,7 @@ func (c *Chat) isCriticalError(ctx context.Context, err error) bool {
 	}
 }
 
-func (c *Chat) readMessage(ctx context.Context, usr User) ([]byte, error) {
+func (c *Business) readMessage(ctx context.Context, usr User) ([]byte, error) {
 	type response struct {
 		msg []byte
 		err error
@@ -331,13 +331,13 @@ func (c *Chat) readMessage(ctx context.Context, usr User) ([]byte, error) {
 
 	select {
 	case <-ctx.Done():
-		c.users.Remove(ctx, usr.ID)
+		c.storer.Remove(ctx, usr.ID)
 		usr.Conn.Close()
 		return nil, ctx.Err()
 
 	case resp = <-ch:
 		if resp.err != nil {
-			c.users.Remove(ctx, usr.ID)
+			c.storer.Remove(ctx, usr.ID)
 			usr.Conn.Close()
 			return nil, resp.err
 		}
@@ -346,7 +346,7 @@ func (c *Chat) readMessage(ctx context.Context, usr User) ([]byte, error) {
 	return resp.msg, nil
 }
 
-func (c *Chat) sendMessageClient(from User, to User, fromNonce uint64, encrypted bool, msg []byte) error {
+func (c *Business) sendMessageClient(from User, to User, fromNonce uint64, encrypted bool, msg []byte) error {
 	m := outgoingMessage{
 		From: outgoingUser{
 			ID:    from.ID,
@@ -364,7 +364,7 @@ func (c *Chat) sendMessageClient(from User, to User, fromNonce uint64, encrypted
 	return nil
 }
 
-func (c *Chat) sendMessageBus(ctx context.Context, from User, inMsg incomingMessage) error {
+func (c *Business) sendMessageBus(ctx context.Context, from User, inMsg incomingMessage) error {
 	busMsg := busMessage{
 		CapID:           c.capID,
 		FromID:          from.ID,
@@ -385,14 +385,14 @@ func (c *Chat) sendMessageBus(ctx context.Context, from User, inMsg incomingMess
 	return nil
 }
 
-func (c *Chat) pong(id common.Address) func(appData string) error {
+func (c *Business) pong(id common.Address) func(appData string) error {
 	f := func(appData string) error {
 		ctx := web.SetTraceID(context.Background(), uuid.New())
 
 		c.log.Debug(ctx, "*** PONG ***", "id", id, "status", "started")
 		defer c.log.Debug(ctx, "*** PONG ***", "id", id, "status", "completed")
 
-		usr, err := c.users.UpdateLastPong(ctx, id)
+		usr, err := c.storer.UpdateLastPong(ctx, id)
 		if err != nil {
 			c.log.Info(ctx, "*** PONG ***", "id", id, "ERROR", err)
 			return nil
@@ -407,7 +407,7 @@ func (c *Chat) pong(id common.Address) func(appData string) error {
 	return f
 }
 
-func (c *Chat) ping(maxWait time.Duration) {
+func (c *Business) ping(maxWait time.Duration) {
 	ticker := time.NewTicker(maxWait)
 
 	go func() {
@@ -418,11 +418,11 @@ func (c *Chat) ping(maxWait time.Duration) {
 
 			c.log.Debug(ctx, "*** PING ***", "status", "started")
 
-			for id, conn := range c.users.Connections() {
+			for id, conn := range c.storer.Connections() {
 				sub := conn.LastPong.Sub(conn.LastPing)
 				if sub > maxWait {
 					c.log.Info(ctx, "*** PING ***", "ping", conn.LastPing.String(), "pong", conn.LastPong.Second(), "maxWait", maxWait, "sub", sub.String())
-					c.users.Remove(ctx, id)
+					c.storer.Remove(ctx, id)
 					continue
 				}
 
@@ -432,7 +432,7 @@ func (c *Chat) ping(maxWait time.Duration) {
 					c.log.Info(ctx, "*** PING ***", "status", "failed", "id", id, "ERROR", err)
 				}
 
-				if err := c.users.UpdateLastPing(ctx, id); err != nil {
+				if err := c.storer.UpdateLastPing(ctx, id); err != nil {
 					c.log.Info(ctx, "*** PING ***", "status", "failed", "id", id, "ERROR", err)
 				}
 			}

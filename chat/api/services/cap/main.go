@@ -14,9 +14,9 @@ import (
 	"time"
 
 	"github.com/ardanlabs/conf/v3"
-	"github.com/ardanlabs/usdl/chat/app/sdk/chat"
-	"github.com/ardanlabs/usdl/chat/app/sdk/chat/users"
 	"github.com/ardanlabs/usdl/chat/app/sdk/mux"
+	"github.com/ardanlabs/usdl/chat/business/chatbus"
+	"github.com/ardanlabs/usdl/chat/business/chatbus/storage/usermem"
 	"github.com/ardanlabs/usdl/chat/foundation/logger"
 	"github.com/ardanlabs/usdl/chat/foundation/web"
 	"github.com/google/uuid"
@@ -166,7 +166,7 @@ func run(ctx context.Context, log *logger.Logger) error {
 	}
 	defer nc.Close()
 
-	chat, err := chat.New(log, nc, cfg.NATS.Subject, users.New(log), capID)
+	chatBus, err := chatbus.NewBusiness(log, nc, usermem.New(log), cfg.NATS.Subject, capID)
 	if err != nil {
 		return fmt.Errorf("chat: %w", err)
 	}
@@ -180,8 +180,8 @@ func run(ctx context.Context, log *logger.Logger) error {
 	signal.Notify(shutdown, syscall.SIGINT, syscall.SIGTERM)
 
 	cfgMux := mux.Config{
-		Log:  log,
-		Chat: chat,
+		Log:     log,
+		ChatBus: chatBus,
 	}
 
 	webAPI := mux.WebAPI(cfgMux)

@@ -6,16 +6,16 @@ import (
 	"net/http"
 
 	"github.com/ardanlabs/usdl/chat/app/domain/chatapp"
-	"github.com/ardanlabs/usdl/chat/app/sdk/chat"
 	"github.com/ardanlabs/usdl/chat/app/sdk/mid"
+	"github.com/ardanlabs/usdl/chat/business/chatbus"
 	"github.com/ardanlabs/usdl/chat/foundation/logger"
 	"github.com/ardanlabs/usdl/chat/foundation/web"
 )
 
 // Config contains all the mandatory systems required by handlers.
 type Config struct {
-	Log  *logger.Logger
-	Chat *chat.Chat
+	Log     *logger.Logger
+	ChatBus *chatbus.Business
 }
 
 // WebAPI constructs a http.Handler with all application routes bound.
@@ -31,7 +31,7 @@ func WebAPI(cfg Config) http.Handler {
 		mid.Panics(),
 	)
 
-	chatapp.Routes(app, cfg.Log, cfg.Chat)
+	chatapp.Routes(app, cfg.Log, cfg.ChatBus)
 
 	return app
 }

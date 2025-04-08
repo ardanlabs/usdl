@@ -1,4 +1,4 @@
-package chat
+package chatbus
 
 import (
 	"math/big"

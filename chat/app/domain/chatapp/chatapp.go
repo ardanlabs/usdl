@@ -5,18 +5,18 @@ import (
 	"context"
 	"net/http"
 
-	"github.com/ardanlabs/usdl/chat/app/sdk/chat"
 	"github.com/ardanlabs/usdl/chat/app/sdk/errs"
+	"github.com/ardanlabs/usdl/chat/business/chatbus"
 	"github.com/ardanlabs/usdl/chat/foundation/logger"
 	"github.com/ardanlabs/usdl/chat/foundation/web"
 )
 
 type app struct {
 	log  *logger.Logger
-	chat *chat.Chat
+	chat *chatbus.Business
 }
 
-func newApp(log *logger.Logger, chat *chat.Chat) *app {
+func newApp(log *logger.Logger, chat *chatbus.Business) *app {
 	return &app{
 		log:  log,
 		chat: chat,
