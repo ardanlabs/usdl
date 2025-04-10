@@ -350,9 +350,9 @@ func (m *jetStreamMsg) ackReply(ctx context.Context, ackType ackType, sync bool,
 
 	var body []byte
 	if opts.nakDelay > 0 {
-		body = fmt.Appendf(nil, "%s {\"delay\": %d}", ackType, opts.nakDelay.Nanoseconds())
+		body = []byte(fmt.Sprintf("%s {\"delay\": %d}", ackType, opts.nakDelay.Nanoseconds()))
 	} else if opts.termReason != "" {
-		body = fmt.Appendf(nil, "%s %s", ackType, opts.termReason)
+		body = []byte(fmt.Sprintf("%s %s", ackType, opts.termReason))
 	} else {
 		body = ackType
 	}
