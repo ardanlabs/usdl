@@ -1,5 +1,7 @@
 github.com/ardanlabs/conf/v3 v3.4.0 h1:Qy7/doJjhsv7Lvzqd9tbvH8fAZ9jzqKtwnwcmZ+sxGs=
 github.com/ardanlabs/conf/v3 v3.4.0/go.mod h1:OIi6NK95fj8jKFPdZ/UmcPlY37JBg99hdP9o5XmNK9c=
+github.com/benbjohnson/hashfs v0.2.2 h1:vFZtksphM5LcnMRFctj49jCUkCc7wp3NP6INyfjkse4=
+github.com/benbjohnson/hashfs v0.2.2/go.mod h1:7OMXaMVo1YkfiIPxKrl7OXkUTUgWjmsAKyR+E6xDIRM=
 github.com/decred/dcrd/crypto/blake256 v1.0.0 h1:/8DMNYp9SGi5f0w7uCm6d6M4OU2rGFK09Y2A4Xv7EE0=
 github.com/decred/dcrd/crypto/blake256 v1.0.0/go.mod h1:sQl2p6Y26YV+ZOcSTP6thNdn47hh8kt6rqSlvmrXFAc=
 github.com/decred/dcrd/dcrec/secp256k1/v4 v4.0.1 h1:YLtO71vCjJRCBcrPMtQ9nqBsqpA1m5sE92cU+pd5Mcc=

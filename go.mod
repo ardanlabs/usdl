@@ -4,6 +4,7 @@ go 1.23.4
 
 require (
 	github.com/ardanlabs/conf/v3 v3.4.0
+	github.com/benbjohnson/hashfs v0.2.2
 	github.com/ethereum/go-ethereum v1.15.5
 	github.com/gdamore/tcell/v2 v2.8.1
 	github.com/go-chi/chi/v5 v5.2.1

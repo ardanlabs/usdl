@@ -1,6 +1,7 @@
 package web
 
 import (
+	"embed"
 	"fmt"
 	"log"
 	"net/http"
@@ -8,10 +9,16 @@ import (
 	"strconv"
 
 	"github.com/ardanlabs/usdl/chat/api/frontends/client/app"
+	"github.com/benbjohnson/hashfs"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 )
+
+//go:embed static/*
+var staticFS embed.FS
+
+var staticSys = hashfs.NewFS(staticFS)
 
 type App interface {
 	SendMessageHandler(to common.Address, msg []byte) error
@@ -19,12 +26,23 @@ type App interface {
 	QueryContactByID(id common.Address) (app.User, error)
 }
 
+type Message struct {
+	app.Message
+	ID string
+}
+
 type WebUI struct {
-	srv *http.Server
+	app       App
+	usernames map[string]string
+	messages  []Message
 }
 
 func New(myAccountID common.Address) *WebUI {
-	return nil
+	ui := &WebUI{
+		usernames: map[string]string{},
+	}
+	ui.loadContacts()
+	return ui
 }
 
 func (ui *WebUI) Run() error {
@@ -43,6 +61,10 @@ func (ui *WebUI) Run() error {
 	router.Use(middleware.Logger)
 	router.Use(middleware.Recoverer)
 
+	router.Get("/static/*", func(w http.ResponseWriter, r *http.Request) {
+		http.FileServer(http.FS(staticSys)).ServeHTTP(w, r)
+	})
+
 	router.Get("/", func(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte("Hello, Datastar!!"))
 	})
@@ -57,13 +79,31 @@ func (ui *WebUI) Run() error {
 }
 
 func (ui *WebUI) SetApp(app App) {
-
+	ui.app = app
+	ui.loadContacts()
 }
 
-func (ui *WebUI) WriteText(id string, msg app.Message) {
+func (ui *WebUI) WriteText(id string, rawMsg app.Message) {
+	msg := Message{
+		Message: rawMsg,
+		ID:      id,
+	}
+	ui.messages = append(ui.messages, msg)
 
+	if _, ok := ui.usernames[id]; !ok {
+		ui.loadContacts()
+	}
 }
 
 func (ui *WebUI) UpdateContact(id string, name string) {
+	ui.usernames[id] = name
+}
 
+func (ui *WebUI) loadContacts() {
+	if ui.app == nil {
+		return
+	}
+	for _, user := range ui.app.Contacts() {
+		ui.usernames[user.ID.Hex()] = user.Name
+	}
 }
