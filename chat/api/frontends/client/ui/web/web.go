@@ -32,14 +32,16 @@ type Message struct {
 }
 
 type WebUI struct {
-	app       App
-	usernames map[string]string
-	messages  []Message
+	app         App
+	usernames   map[string]string
+	myAccountID common.Address
+	messages    []Message
 }
 
 func New(myAccountID common.Address) *WebUI {
 	ui := &WebUI{
-		usernames: map[string]string{},
+		usernames:   map[string]string{},
+		myAccountID: myAccountID,
 	}
 	ui.loadContacts()
 	return ui
@@ -66,7 +68,9 @@ func (ui *WebUI) Run() error {
 	})
 
 	router.Get("/", func(w http.ResponseWriter, r *http.Request) {
-		w.Write([]byte("Hello, Datastar!!"))
+		ctx := r.Context()
+		log.Printf("foo")
+		PageChat(ui).Render(ctx, w)
 	})
 
 	srv := &http.Server{
@@ -74,7 +78,7 @@ func (ui *WebUI) Run() error {
 		Handler: router,
 	}
 
-	log.Printf("Starting server on port %d\n", port)
+	log.Printf("Starting server on port   %d\n", port)
 	return srv.ListenAndServe()
 }
 
@@ -84,6 +88,7 @@ func (ui *WebUI) SetApp(app App) {
 }
 
 func (ui *WebUI) WriteText(id string, rawMsg app.Message) {
+	log.Printf("WriteText: %s %s", id, rawMsg)
 	msg := Message{
 		Message: rawMsg,
 		ID:      id,
@@ -106,4 +111,12 @@ func (ui *WebUI) loadContacts() {
 	for _, user := range ui.app.Contacts() {
 		ui.usernames[user.ID.Hex()] = user.Name
 	}
+}
+
+func prettyPrintHex(id common.Address) string {
+	return fmt.Sprintf("%s...", id.Hex()[0:6])
+}
+
+func prettyPrintUser(id, name string) string {
+	return fmt.Sprintf("%s %s", id, id)
 }

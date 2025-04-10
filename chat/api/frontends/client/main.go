@@ -34,16 +34,15 @@ func run() error {
 
 	// -------------------------------------------------------------------------
 
-	// tuiUI := tui.New(id.MyAccountID)
-	webUI := web.New(id.MyAccountID)
+	// ui := tui.New(id.MyAccountID)
+	ui := web.New(id.MyAccountID)
 
 	// -------------------------------------------------------------------------
 
-	app := app.NewApp(db, id, url, webUI)
+	app := app.NewApp(db, id, url, ui)
 	defer app.Close()
 
-	// tuiUI.SetApp(app)
-	webUI.SetApp(app)
+	ui.SetApp(app)
 
 	// -------------------------------------------------------------------------
 
