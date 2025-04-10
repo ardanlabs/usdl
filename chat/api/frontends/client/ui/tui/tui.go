@@ -152,6 +152,10 @@ func (ui *TUI) WriteText(msg app.Message) {
 		fmt.Fprintln(ui.textView, "-----")
 		fmt.Fprintf(ui.textView, "%s: %s\n", msg.Name, string(msg.Content))
 
+	case ui.app.ID():
+		fmt.Fprintln(ui.textView, "-----")
+		fmt.Fprintf(ui.textView, "%s: %s\n", msg.Name, string(msg.Content))
+
 	default:
 		idx := ui.list.GetCurrentItem()
 

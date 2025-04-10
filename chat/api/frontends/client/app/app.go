@@ -106,6 +106,10 @@ func (app *App) Close() error {
 	return app.conn.Close()
 }
 
+func (app *App) ID() common.Address {
+	return app.id.MyAccountID
+}
+
 func (app *App) Run() error {
 	return app.ui.Run()
 }
