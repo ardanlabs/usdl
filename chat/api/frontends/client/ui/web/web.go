@@ -77,13 +77,42 @@ func (ui *WebUI) SetApp(app *app.App) {
 }
 
 func (ui *WebUI) WriteText(msg app.Message) {
-	log.Printf("WriteText: %s %s", msg.ID, msg)
-
 	ui.messages = append(ui.messages, msg)
 
-	// if _, ok := ui.usernames[id]; !ok {
-	// 	ui.loadContacts()
-	// }
+	switch msg.ID {
+	case common.Address{}:
+		fmt.Fprintln(os.Stdout, "-----")
+		fmt.Fprintf(os.Stdout, "%s: %s\n", msg.Name, string(msg.Content))
+
+	case ui.app.ID():
+		fmt.Fprintln(os.Stdout, "-----")
+		fmt.Fprintf(os.Stdout, "%s: %s\n", msg.Name, string(msg.Content))
+
+	default:
+		// idx := ui.list.GetCurrentItem()
+
+		// _, currentID := ui.list.GetItemText(idx)
+		// if currentID == "" {
+		// 	fmt.Fprintln(os.Stdout, "-----")
+		// 	fmt.Fprintln(os.Stdout, "id not found: "+msg.ID.Hex())
+		// 	return
+		// }
+
+		// if msg.ID.Hex() == currentID {
+		// 	fmt.Fprintln(os.Stdout, "-----")
+		// 	fmt.Fprintf(os.Stdout, "%s: %s\n", msg.Name, string(msg.Content))
+		// 	return
+		// }
+
+		// for i := range ui.list.GetItemCount() {
+		// 	name, idStr := ui.list.GetItemText(i)
+		// 	if msg.ID.Hex() == idStr {
+		// 		ui.list.SetItemText(i, "* "+name, idStr)
+		// 		ui.tviewApp.Draw()
+		// 		return
+		// 	}
+		// }
+	}
 }
 
 func (ui *WebUI) UpdateContact(id string, name string) {
