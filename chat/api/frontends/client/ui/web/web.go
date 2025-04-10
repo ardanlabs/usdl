@@ -20,22 +20,11 @@ var staticFS embed.FS
 
 var staticSys = hashfs.NewFS(staticFS)
 
-type App interface {
-	SendMessageHandler(to common.Address, msg []byte) error
-	Contacts() []app.User
-	QueryContactByID(id common.Address) (app.User, error)
-}
-
-type Message struct {
-	app.Message
-	ID string
-}
-
 type WebUI struct {
-	app         App
+	app         *app.App
 	usernames   map[string]string
 	myAccountID common.Address
-	messages    []Message
+	messages    []app.Message
 }
 
 func New(myAccountID common.Address) *WebUI {
@@ -82,22 +71,19 @@ func (ui *WebUI) Run() error {
 	return srv.ListenAndServe()
 }
 
-func (ui *WebUI) SetApp(app App) {
+func (ui *WebUI) SetApp(app *app.App) {
 	ui.app = app
 	ui.loadContacts()
 }
 
-func (ui *WebUI) WriteText(id string, rawMsg app.Message) {
-	log.Printf("WriteText: %s %s", id, rawMsg)
-	msg := Message{
-		Message: rawMsg,
-		ID:      id,
-	}
+func (ui *WebUI) WriteText(msg app.Message) {
+	log.Printf("WriteText: %s %s", msg.ID, msg)
+
 	ui.messages = append(ui.messages, msg)
 
-	if _, ok := ui.usernames[id]; !ok {
-		ui.loadContacts()
-	}
+	// if _, ok := ui.usernames[id]; !ok {
+	// 	ui.loadContacts()
+	// }
 }
 
 func (ui *WebUI) UpdateContact(id string, name string) {

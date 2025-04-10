@@ -24,6 +24,7 @@ type MyAccount struct {
 }
 
 type Message struct {
+	ID          common.Address
 	Name        string
 	Content     []byte
 	DateCreated time.Time
@@ -50,7 +51,7 @@ type Storage interface {
 
 type UI interface {
 	Run() error // Must be non-blocking
-	WriteText(id string, msg Message)
+	WriteText(msg Message)
 	UpdateContact(id string, name string)
 }
 
@@ -168,13 +169,13 @@ func (app *App) ReceiveCapMessage(conn *websocket.Conn) {
 	for {
 		_, rawMsg, err := conn.ReadMessage()
 		if err != nil {
-			app.ui.WriteText("system", errorMessage("read: %s", err))
+			app.ui.WriteText(errorMessage("read: %s", err))
 			return
 		}
 
 		var inMsg incomingMessage
 		if err := json.Unmarshal(rawMsg, &inMsg); err != nil {
-			app.ui.WriteText("system", errorMessage("unmarshal: %s", err))
+			app.ui.WriteText(errorMessage("unmarshal: %s", err))
 			return
 		}
 
@@ -183,7 +184,7 @@ func (app *App) ReceiveCapMessage(conn *websocket.Conn) {
 		case err != nil:
 			user, err = app.db.InsertContact(inMsg.From.ID, inMsg.From.Name)
 			if err != nil {
-				app.ui.WriteText("system", errorMessage("add contact: %s", err))
+				app.ui.WriteText(errorMessage("add contact: %s", err))
 				return
 			}
 
@@ -197,12 +198,12 @@ func (app *App) ReceiveCapMessage(conn *websocket.Conn) {
 
 		expNonce := user.LastNonce + 1
 		if inMsg.From.Nonce != expNonce {
-			app.ui.WriteText("system", errorMessage("invalid nonce: possible security issue with contact: got: %d, exp: %d", inMsg.From.Nonce, expNonce))
+			app.ui.WriteText(errorMessage("invalid nonce: possible security issue with contact: got: %d, exp: %d", inMsg.From.Nonce, expNonce))
 			return
 		}
 
 		if err := app.db.UpdateContactNonce(inMsg.From.ID, expNonce); err != nil {
-			app.ui.WriteText("system", errorMessage("update app nonce: %s", err))
+			app.ui.WriteText(errorMessage("update app nonce: %s", err))
 			return
 		}
 
@@ -210,7 +211,7 @@ func (app *App) ReceiveCapMessage(conn *websocket.Conn) {
 
 		msg, err := app.preprocessRecvMessage(inMsg)
 		if err != nil {
-			app.ui.WriteText("system", errorMessage("preprocess message: %s", err))
+			app.ui.WriteText(errorMessage("preprocess message: %s", err))
 			return
 		}
 
@@ -218,16 +219,17 @@ func (app *App) ReceiveCapMessage(conn *websocket.Conn) {
 
 		if inMsg.Msg[0] != '/' {
 			msg := Message{
+				ID:      inMsg.From.ID,
 				Name:    inMsg.From.Name,
 				Content: msg,
 			}
 
 			if err := app.db.InsertMessage(inMsg.From.ID, msg); err != nil {
-				app.ui.WriteText("system", errorMessage("add message: %s", err))
+				app.ui.WriteText(errorMessage("add message: %s", err))
 				return
 			}
 
-			app.ui.WriteText(inMsg.From.ID.Hex(), msg)
+			app.ui.WriteText(msg)
 		}
 	}
 }
@@ -306,6 +308,7 @@ func (app *App) SendMessageHandler(to common.Address, msg []byte) error {
 
 	if msg[0] != '/' {
 		msg := Message{
+			ID:      app.id.MyAccountID,
 			Name:    "You",
 			Content: onScreen,
 		}
@@ -314,7 +317,7 @@ func (app *App) SendMessageHandler(to common.Address, msg []byte) error {
 			return fmt.Errorf("add message: %w", err)
 		}
 
-		app.ui.WriteText(to.Hex(), msg)
+		app.ui.WriteText(msg)
 	}
 
 	return nil

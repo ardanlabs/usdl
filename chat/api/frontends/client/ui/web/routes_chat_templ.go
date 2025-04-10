@@ -30,7 +30,7 @@ func PageChat(ui *WebUI) templ.Component {
 		if templ_7745c5c3_Var1 == nil {
 			templ_7745c5c3_Var1 = templ.NopComponent
 		}
-		ctx = templ.ClearChildren(ctx)
+		templ.ClearChildren(ctx)
 		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1, "<!doctype html><html lang=\"en\"><head><meta charset=\"UTF-8\"><meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"><title>USDL Chat + Datastar</title><style>\n    @import \"https://unpkg.com/open-props\";\n    @import \"https://unpkg.com/open-props/normalize.min.css\";\n    @import \"https://unpkg.com/open-props/buttons.min.css\";\n\n\n    .chat {\n      display: flex;\n      height: 100vh;\n      width: 100vw;\n\n      gap: var(--size-8);\n      padding: var(--size-4);\n\n      .users {\n        display: flex;\n        flex-direction: column;\n        min-width: 400px;\n        background-color: var(--gray-11);\n        padding: var(--size-4);\n        border-radius: var(--radius-3);\n      }\n\n      .rightPane {\n        display: flex;\n        flex-direction: column;\n        flex-grow: 1;\n        gap: var(--size-4);\n      }\n\n      .messages {\n        flex: 1;\n        width: 100%;\n        display: flex;\n        flex-direction: column;\n        flex-grow: 1;\n        background-color: var(--gray-11);\n        padding: var(--size-4);\n        border-radius: var(--radius-3);\n        gap: var(--size-4);\n\n        .message {\n          display: flex;\n          flex-direction: column;\n          gap: var(--size-2);\n          margin-bottom: var(--size-4);\n\n          img {\n            width: 50px;\n            height: 50px;\n            border-radius: var(--radius-round);\n            box-shadow: var(--shadow-3);\n          }\n\n          .user {\n            display: flex;\n            align-items: center;\n            font-size: var(--font-size-2);\n            gap: var(--size-2);\n            font-weight: bold;\n            color: var(--gray-9);\n          }\n\n          .text {\n            background-color: var(--gray-9);\n            padding: var(--size-4);\n            border-radius: var(--radius-3);\n            color: var(--white);\n          }\n        }\n      }\n\n      .inputs {\n        display: flex;\n        gap: var(--size-4);\n        align-items: center;\n\n        input {\n          flex-grow: 1;\n          padding: var(--size-4);\n          border-radius: var(--radius-3);\n          border: 1px solid var(--gray-7);\n          background-color: var(--gray-11);\n        }\n\n        button {\n          padding: var(--size-4);\n        }\n      }\n    }\n  </style></head><body><div class=\"chat\"><div class=\"users\"><h2>Users</h2>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
@@ -97,7 +97,7 @@ func PageChat(ui *WebUI) templ.Component {
 					return templ_7745c5c3_Err
 				}
 				var templ_7745c5c3_Var4 string
-				templ_7745c5c3_Var4, templ_7745c5c3_Err = templ.JoinStringErrs(prettyPrintUser(msg.ID, msg.Name))
+				templ_7745c5c3_Var4, templ_7745c5c3_Err = templ.JoinStringErrs(prettyPrintUser(msg.ID.Hex(), msg.Name))
 				if templ_7745c5c3_Err != nil {
 					return templ.Error{Err: templ_7745c5c3_Err, FileName: `routes_chat.templ`, Line: 141, Col: 45}
 				}

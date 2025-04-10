@@ -9,12 +9,6 @@ import (
 	"github.com/rivo/tview"
 )
 
-type App interface {
-	SendMessageHandler(to common.Address, msg []byte) error
-	Contacts() []app.User
-	QueryContactByID(id common.Address) (app.User, error)
-}
-
 // =============================================================================
 
 type TUI struct {
@@ -24,7 +18,7 @@ type TUI struct {
 	textView *tview.TextView
 	textArea *tview.TextArea
 	button   *tview.Button
-	app      App
+	app      *app.App
 }
 
 func New(myAccountID common.Address) *TUI {
@@ -137,7 +131,7 @@ func New(myAccountID common.Address) *TUI {
 	return &ui
 }
 
-func (ui *TUI) SetApp(app App) {
+func (ui *TUI) SetApp(app *app.App) {
 	ui.app = app
 
 	for i, user := range app.Contacts() {
@@ -150,11 +144,11 @@ func (ui *TUI) Run() error {
 	return ui.tviewApp.SetRoot(ui.flex, true).EnableMouse(true).Run()
 }
 
-func (ui *TUI) WriteText(id string, msg app.Message) {
+func (ui *TUI) WriteText(msg app.Message) {
 	ui.textView.ScrollToEnd()
 
-	switch id {
-	case "system":
+	switch msg.ID {
+	case common.Address{}:
 		fmt.Fprintln(ui.textView, "-----")
 		fmt.Fprintf(ui.textView, "%s: %s\n", msg.Name, string(msg.Content))
 
@@ -164,11 +158,11 @@ func (ui *TUI) WriteText(id string, msg app.Message) {
 		_, currentID := ui.list.GetItemText(idx)
 		if currentID == "" {
 			fmt.Fprintln(ui.textView, "-----")
-			fmt.Fprintln(ui.textView, "id not found: "+id)
+			fmt.Fprintln(ui.textView, "id not found: "+msg.ID.Hex())
 			return
 		}
 
-		if id == currentID {
+		if msg.ID.Hex() == currentID {
 			fmt.Fprintln(ui.textView, "-----")
 			fmt.Fprintf(ui.textView, "%s: %s\n", msg.Name, string(msg.Content))
 			return
@@ -176,7 +170,7 @@ func (ui *TUI) WriteText(id string, msg app.Message) {
 
 		for i := range ui.list.GetItemCount() {
 			name, idStr := ui.list.GetItemText(i)
-			if id == idStr {
+			if msg.ID.Hex() == idStr {
 				ui.list.SetItemText(i, "* "+name, idStr)
 				ui.tviewApp.Draw()
 				return
@@ -207,7 +201,7 @@ func (ui *TUI) buttonHandler() {
 			Name:    "system",
 			Content: fmt.Appendf(nil, "Error sending message: %s", err),
 		}
-		ui.WriteText("system", msg)
+		ui.WriteText(msg)
 		return
 	}
 

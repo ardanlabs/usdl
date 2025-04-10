@@ -24,10 +24,11 @@ var (
 )
 
 type message struct {
-	Name        string    `json:"name"`
-	Encrypted   bool      `json:"encrypted"`
-	Content     []byte    `json:"content"`
-	DateCreated time.Time `json:"date_created"`
+	ID          common.Address `json:"id"`
+	Name        string         `json:"name"`
+	Encrypted   bool           `json:"encrypted"`
+	Content     []byte         `json:"content"`
+	DateCreated time.Time      `json:"date_created"`
 }
 
 type myAccount struct {

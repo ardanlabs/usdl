@@ -150,6 +150,7 @@ func (db *DB) InsertMessage(id common.Address, msg app.Message) error {
 	db.contacts[id] = u
 
 	m := message{
+		ID:          msg.ID,
 		Name:        msg.Name,
 		Content:     msg.Content,
 		DateCreated: time.Now().UTC(),
