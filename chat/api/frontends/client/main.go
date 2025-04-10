@@ -6,7 +6,7 @@ import (
 
 	"github.com/ardanlabs/usdl/chat/api/frontends/client/app"
 	"github.com/ardanlabs/usdl/chat/api/frontends/client/storage/dbfile"
-	"github.com/ardanlabs/usdl/chat/api/frontends/client/ui/tui"
+	"github.com/ardanlabs/usdl/chat/api/frontends/client/ui/web"
 )
 
 const (
@@ -34,14 +34,16 @@ func run() error {
 
 	// -------------------------------------------------------------------------
 
-	ui := tui.New(id.MyAccountID)
+	// tuiUI := tui.New(id.MyAccountID)
+	webUI := web.New(id.MyAccountID)
 
 	// -------------------------------------------------------------------------
 
-	app := app.NewApp(db, ui, id, url)
+	app := app.NewApp(db, id, url, webUI)
 	defer app.Close()
 
-	ui.SetApp(app)
+	// tuiUI.SetApp(app)
+	webUI.SetApp(app)
 
 	// -------------------------------------------------------------------------
 

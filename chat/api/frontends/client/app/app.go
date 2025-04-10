@@ -49,7 +49,7 @@ type Storage interface {
 }
 
 type UI interface {
-	Run() error
+	Run() error // Must be non-blocking
 	WriteText(id string, msg Message)
 	UpdateContact(id string, name string)
 }
@@ -88,7 +88,7 @@ type App struct {
 	conn *websocket.Conn
 }
 
-func NewApp(db Storage, ui UI, id ID, url string) *App {
+func NewApp(db Storage, id ID, url string, ui UI) *App {
 	return &App{
 		db:  db,
 		ui:  ui,
