@@ -64,7 +64,7 @@ func NewDB(filePath string, myAccountID common.Address) (*DB, error) {
 		return nil, fmt.Errorf("gorm open: %w", err)
 	}
 
-	if err := db.AutoMigrate(&user{}, &message{}, myAccount{}); err != nil {
+	if err := db.AutoMigrate(&user{}, &message{}, &myAccount{}); err != nil {
 		return nil, fmt.Errorf("auto migrate: %w", err)
 	}
 
