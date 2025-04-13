@@ -75,36 +75,13 @@ func NewDB(filePath string, myAccountID common.Address) (*DB, error) {
 	return &DB{db: db}, nil
 }
 
-func saveMyAccount(db *gorm.DB, myAccountID common.Address) error {
-	var myAcc myAccount
-	res := db.First(&myAcc)
-	if res.Error != nil && res.Error != gorm.ErrRecordNotFound {
-		return fmt.Errorf("query my account: %w", res.Error)
-	}
-
-	if res.Error == gorm.ErrRecordNotFound {
-		res := db.Save(&myAccount{
-			Singleton: true,
-			ID:        strings.ToLower(myAccountID.Hex()),
-			Name:      "Anonymous",
-		})
-
-		return res.Error
-	}
-
-	myAcc.Singleton = true
-	myAcc.ID = strings.ToLower(myAccountID.Hex())
-	res = db.Save(&myAcc)
-	return res.Error
-}
-
 func (db *DB) MyAccount() app.MyAccount {
 	myAccount := myAccount{
 		Singleton: true,
 	}
 	res := db.db.First(&myAccount)
 	if res.Error != nil {
-		return app.MyAccount{}
+		return app.MyAccount{} // maybe better to return an error
 	}
 
 	return app.MyAccount{
@@ -118,7 +95,6 @@ func (db *DB) InsertContact(id common.Address, name string) (app.User, error) {
 		ID:   strings.ToLower(id.Hex()),
 		Name: name,
 	})
-
 	if res.Error != nil {
 		return app.User{}, fmt.Errorf("insert contact: %w", res.Error)
 	}
@@ -156,7 +132,10 @@ func (db *DB) QueryContactByID(id common.Address) (app.User, error) {
 
 func (db *DB) Contacts() []app.User {
 	var users []user
-	db.db.Preload("Messages").Find(&users)
+	res := db.db.Preload("Messages").Find(&users)
+	if res.Error != nil {
+		return nil // maybe better to return an error
+	}
 
 	contacts := make([]app.User, len(users))
 	for i, user := range users {
@@ -186,7 +165,6 @@ func (db *DB) InsertMessage(id common.Address, msg app.Message) error {
 		Content: msg.Content,
 		UserID:  strings.ToLower(id.Hex()),
 	})
-
 	if res.Error != nil {
 		return fmt.Errorf("insert message: %w", res.Error)
 	}
@@ -199,6 +177,7 @@ func (db *DB) UpdateAppNonce(id common.Address, nonce uint64) error {
 	if res.Error != nil {
 		return fmt.Errorf("update app nonce: %w", res.Error)
 	}
+
 	return nil
 }
 
@@ -207,6 +186,7 @@ func (db *DB) UpdateContactNonce(id common.Address, nonce uint64) error {
 	if res.Error != nil {
 		return fmt.Errorf("update contact nonce: %w", res.Error)
 	}
+
 	return nil
 }
 
@@ -215,6 +195,7 @@ func (db *DB) UpdateContactKey(id common.Address, key string) error {
 	if res.Error != nil {
 		return fmt.Errorf("update contact key: %w", res.Error)
 	}
+
 	return nil
 }
 
@@ -228,4 +209,24 @@ func (db *DB) CleanTables() error {
 	}
 
 	return nil
+}
+
+func saveMyAccount(db *gorm.DB, myAccountID common.Address) error {
+	var myAcc myAccount
+	res := db.First(&myAcc)
+	if res.Error != nil && res.Error != gorm.ErrRecordNotFound {
+		return fmt.Errorf("query my account: %w", res.Error)
+	}
+
+	if res.Error == gorm.ErrRecordNotFound {
+		return db.Save(&myAccount{
+			Singleton: true,
+			ID:        strings.ToLower(myAccountID.Hex()),
+			Name:      "Anonymous",
+		}).Error
+	}
+
+	myAcc.Singleton = true
+	myAcc.ID = strings.ToLower(myAccountID.Hex())
+	return db.Save(&myAcc).Error
 }
