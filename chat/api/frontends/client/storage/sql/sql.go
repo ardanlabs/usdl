@@ -77,25 +77,36 @@ func NewDB(filePath string, myAccountID common.Address) (*DB, error) {
 
 func saveMyAccount(db *gorm.DB, myAccountID common.Address) error {
 	var myAcc myAccount
-	db.First(&myAcc)
+	res := db.First(&myAcc)
+	if res.Error != nil && res.Error != gorm.ErrRecordNotFound {
+		return fmt.Errorf("query my account: %w", res.Error)
+	}
 
-	if myAcc.ID == "" {
+	if res.Error == gorm.ErrRecordNotFound {
 		res := db.Save(&myAccount{
 			Singleton: true,
 			ID:        strings.ToLower(myAccountID.Hex()),
 			Name:      "Anonymous",
 		})
-		if res.Error != nil {
-			return fmt.Errorf("create my account: %w", res.Error)
-		}
+
+		return res.Error
 	}
 
-	return nil
+	myAcc.Singleton = true
+	myAcc.ID = strings.ToLower(myAccountID.Hex())
+	res = db.Save(&myAcc)
+	return res.Error
 }
 
 func (db *DB) MyAccount() app.MyAccount {
-	var myAccount myAccount
-	db.db.First(&myAccount)
+	myAccount := myAccount{
+		Singleton: true,
+	}
+	res := db.db.First(&myAccount)
+	if res.Error != nil {
+		return app.MyAccount{}
+	}
+
 	return app.MyAccount{
 		ID:   common.HexToAddress(myAccount.ID),
 		Name: myAccount.Name,
