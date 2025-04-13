@@ -1,3 +1,4 @@
+// Package tui provides a terminal user interface for the chat application.
 package tui
 
 import (
