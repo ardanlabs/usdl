@@ -5,7 +5,7 @@ import (
 	"os"
 
 	"github.com/ardanlabs/usdl/chat/api/frontends/client/app"
-	"github.com/ardanlabs/usdl/chat/api/frontends/client/storage/dbfile"
+	"github.com/ardanlabs/usdl/chat/api/frontends/client/storage/sql"
 	"github.com/ardanlabs/usdl/chat/api/frontends/client/ui/tui"
 )
 
@@ -27,7 +27,8 @@ func run() error {
 		return fmt.Errorf("id: %w", err)
 	}
 
-	db, err := dbfile.NewDB(configFilePath, id.MyAccountID)
+	// db, err := dbfile.NewDB(configFilePath, id.MyAccountID)
+	db, err := sql.NewDB(configFilePath, id.MyAccountID)
 	if err != nil {
 		return fmt.Errorf("config: %w", err)
 	}
