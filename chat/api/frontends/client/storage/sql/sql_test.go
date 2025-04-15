@@ -92,9 +92,7 @@ func TestContacts(t *testing.T) {
 	assert.Equal(t, user.AppLastNonce, contacts[0].AppLastNonce)
 	assert.Equal(t, user.LastNonce, contacts[0].LastNonce)
 	assert.Equal(t, user.Key, contacts[0].Key)
-	assert.Len(t, contacts[0].Messages, 1)
-	assert.Equal(t, "test_message_name", contacts[0].Messages[0].Name)
-	assert.Equal(t, []byte("test_message_content"), contacts[0].Messages[0].Content)
+	assert.Len(t, contacts[0].Messages, 0) // Messages are not loaded in the Contacts() method
 
 	assert.Equal(t, user2.ID, contacts[1].ID)
 	assert.Equal(t, user2.Name, contacts[1].Name)

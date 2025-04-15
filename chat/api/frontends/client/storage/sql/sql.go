@@ -132,28 +132,19 @@ func (db *DB) QueryContactByID(id common.Address) (app.User, error) {
 
 func (db *DB) Contacts() []app.User {
 	var users []user
-	res := db.db.Preload("Messages").Find(&users)
+	res := db.db.Find(&users)
 	if res.Error != nil {
 		return nil // maybe better to return an error
 	}
 
 	contacts := make([]app.User, len(users))
 	for i, user := range users {
-		msgs := make([]app.Message, len(user.Messages))
-		for j, msg := range user.Messages {
-			msgs[j] = app.Message{
-				Name:        msg.Name,
-				Content:     msg.Content,
-				DateCreated: msg.CreatedAt.Local(),
-			}
-		}
 		contacts[i] = app.User{
 			ID:           common.HexToAddress(user.ID),
 			Name:         user.Name,
 			AppLastNonce: user.AppLastNonce,
 			LastNonce:    user.LastNonce,
 			Key:          user.Key,
-			Messages:     msgs,
 		}
 	}
 	return contacts
