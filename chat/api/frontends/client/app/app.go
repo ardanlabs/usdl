@@ -52,7 +52,7 @@ type Storage interface {
 type UI interface {
 	Run() error // Must be non-blocking
 	WriteText(msg Message)
-	UpdateContact(id string, name string)
+	UpdateContact(id common.Address, name string)
 }
 
 // =============================================================================
@@ -192,7 +192,7 @@ func (app *App) ReceiveCapMessage(conn *websocket.Conn) {
 				return
 			}
 
-			app.ui.UpdateContact(inMsg.From.ID.Hex(), inMsg.From.Name)
+			app.ui.UpdateContact(inMsg.From.ID, inMsg.From.Name)
 
 		default:
 			inMsg.From.Name = user.Name

@@ -7,12 +7,14 @@ import (
 	"net/http"
 	"os"
 	"strconv"
+	"time"
 
 	"github.com/ardanlabs/usdl/chat/api/frontends/client/app"
 	"github.com/benbjohnson/hashfs"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
+	datastar "github.com/starfederation/datastar/sdk/go"
 )
 
 //go:embed static/*
@@ -22,14 +24,14 @@ var staticSys = hashfs.NewFS(staticFS)
 
 type WebUI struct {
 	app         *app.App
-	usernames   map[string]string
+	usernames   map[common.Address]string
 	myAccountID common.Address
 	messages    []app.Message
 }
 
 func New(myAccountID common.Address) *WebUI {
 	ui := &WebUI{
-		usernames:   map[string]string{},
+		usernames:   map[common.Address]string{},
 		myAccountID: myAccountID,
 	}
 	ui.loadContacts()
@@ -60,6 +62,21 @@ func (ui *WebUI) Run() error {
 		ctx := r.Context()
 		log.Printf("foo")
 		PageChat(ui).Render(ctx, w)
+	})
+
+	router.Get("/chat/updates", func(w http.ResponseWriter, r *http.Request) {
+		sse := datastar.NewSSE(w, r)
+		t := time.NewTicker(1 * time.Millisecond)
+
+		for {
+			select {
+			case <-r.Context().Done():
+				return
+			case <-t.C:
+				c := chatMessageFragment(ui.messages...)
+				sse.MergeFragmentTempl(c)
+			}
+		}
 	})
 
 	srv := &http.Server{
@@ -115,7 +132,7 @@ func (ui *WebUI) WriteText(msg app.Message) {
 	}
 }
 
-func (ui *WebUI) UpdateContact(id string, name string) {
+func (ui *WebUI) UpdateContact(id common.Address, name string) {
 	ui.usernames[id] = name
 }
 
@@ -124,7 +141,14 @@ func (ui *WebUI) loadContacts() {
 		return
 	}
 	for _, user := range ui.app.Contacts() {
-		ui.usernames[user.ID.Hex()] = user.Name
+		ui.usernames[user.ID] = user.Name
+
+		u, err := ui.app.QueryContactByID(user.ID)
+		if err != nil {
+			log.Printf("query contact: %s", err)
+		}
+
+		ui.messages = append(ui.messages, u.Messages...)
 	}
 }
 
@@ -132,6 +156,6 @@ func prettyPrintHex(id common.Address) string {
 	return fmt.Sprintf("%s...", id.Hex()[0:6])
 }
 
-func prettyPrintUser(id, name string) string {
-	return fmt.Sprintf("%s %s", id, id)
+func prettyPrintUser(id common.Address, name string) string {
+	return fmt.Sprintf("%s %s", prettyPrintHex(id), name)
 }
