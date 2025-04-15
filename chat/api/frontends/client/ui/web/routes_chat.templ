@@ -2,10 +2,13 @@ package web
 
 import (
 	"github.com/ardanlabs/usdl/chat/api/frontends/client/app"
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/starfederation/datastar/sdk/go"
 	"slices"
+	"strings"
 )
 
-templ PageChat(ui *WebUI) {
+templ PageChat(ui *WebUI, messages ...app.Message) {
 	<!DOCTYPE html>
 	<html lang="en">
 		<head>
@@ -17,12 +20,12 @@ templ PageChat(ui *WebUI) {
 			<script type="module" src="https://cdn.jsdelivr.net/gh/starfederation/datastar@1.0.0-beta.11/bundles/datastar.js"></script>
 		</head>
 		<body data-on-load="@get('/chat/updates')">
-			@ChatFragment(ui)
+			@ChatFragment(ui, messages...)
 		</body>
 	</html>
 }
 
-templ ChatFragment(ui *WebUI) {
+templ ChatFragment(ui *WebUI, messages ...app.Message) {
 	<div id="chat">
 		<div class="users">
 			<h2>Users</h2>
@@ -32,23 +35,35 @@ templ ChatFragment(ui *WebUI) {
 				</div>
 			} else {
 				{{
-	sortedUsers := make([]string, 0, len(ui.usernames))
-	for id, name := range ui.usernames {
-		line := prettyPrintUser(id, name)
-		sortedUsers = append(sortedUsers, line)
-	}
-	slices.Sort(sortedUsers)
+					type User struct {
+						ID    common.Address
+						Label string
+					}
+					sortedUsers := make([]User, 0, len(ui.usernames))
+					for id, name := range ui.usernames {
+						u := User{
+							ID:    id,
+							Label: prettyPrintUser(id, name),
+						}
+						sortedUsers = append(sortedUsers, u)
+					}
+					slices.SortFunc(sortedUsers, func(a, b User) int {
+						return strings.Compare(a.Label, b.Label)
+					})
 				}}
-				for _, line := range sortedUsers {
+				for _, u := range sortedUsers {
 					<div
 						class="user"
-					>{ line }</div>
+						data-on-click={ datastar.PostSSE("/chat/changeUser/%s", u.ID.Hex()) }
+					>
+						{ u.Label }
+					</div>
 				}
 			}
 		</div>
 		<div class="rightPane">
 			<h2>My ID: { prettyPrintHex(ui.myAccountID) }</h2>
-			@chatMessageFragment(ui.messages...)
+			@chatMessageFragment(messages...)
 			<div class="inputs">
 				<input type="text" placeholder="Type your message here..."/>
 				<button>Submit</button>
@@ -67,7 +82,7 @@ templ chatMessageFragment(messages ...app.Message) {
 			for _, msg := range messages {
 				<div class="message">
 					<div class="user">
-						<img src="https://i.pravatar.cc/300" alt="User Avatar"/>
+						// <img src="https://i.pravatar.cc/300" alt="User Avatar"/>
 						{ prettyPrintUser(msg.ID, msg.Name) }
 					</div>
 					<div class="text">{ string(msg.Content) }</div>

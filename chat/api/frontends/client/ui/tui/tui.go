@@ -183,9 +183,9 @@ func (ui *TUI) WriteText(msg app.Message) {
 	}
 }
 
-func (ui *TUI) UpdateContact(id string, name string) {
+func (ui *TUI) UpdateContact(id common.Address, name string) {
 	shortcut := rune(ui.list.GetItemCount() + 49)
-	ui.list.AddItem(name, id, shortcut, nil)
+	ui.list.AddItem(name, id.Hex(), shortcut, nil)
 }
 
 // =============================================================================

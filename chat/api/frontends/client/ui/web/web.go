@@ -26,7 +26,8 @@ type WebUI struct {
 	app         *app.App
 	usernames   map[common.Address]string
 	myAccountID common.Address
-	messages    []app.Message
+
+	visibleUser common.Address
 }
 
 func New(myAccountID common.Address) *WebUI {
@@ -34,12 +35,25 @@ func New(myAccountID common.Address) *WebUI {
 		usernames:   map[common.Address]string{},
 		myAccountID: myAccountID,
 	}
+
 	ui.loadContacts()
 	return ui
 }
 
+var zeroUser common.Address
+
+func (ui *WebUI) currentMessages() []app.Message {
+	if ui.visibleUser == zeroUser {
+		return nil
+	}
+	u, err := ui.app.QueryContactByID(ui.visibleUser)
+	if err != nil {
+		return nil
+	}
+	return u.Messages
+}
+
 func (ui *WebUI) Run() error {
-	log.Printf("FOOO!!!!")
 
 	portRaw := os.Getenv("PORT")
 	if portRaw == "" {
@@ -60,20 +74,39 @@ func (ui *WebUI) Run() error {
 
 	router.Get("/", func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
-		log.Printf("foo")
-		PageChat(ui).Render(ctx, w)
+
+		PageChat(ui, ui.currentMessages()...).Render(ctx, w)
+	})
+
+	router.Post("/chat/changeUser/{userHexID}", func(w http.ResponseWriter, r *http.Request) {
+		userHexID := chi.URLParam(r, "userHexID")
+		if userHexID == "" {
+			http.Error(w, "userHexID not found", http.StatusBadRequest)
+			return
+		}
+
+		id := common.HexToAddress(userHexID)
+		if id == zeroUser {
+			http.Error(w, "userHexID not found", http.StatusBadRequest)
+			return
+		}
+
+		ui.visibleUser = id
+
 	})
 
 	router.Get("/chat/updates", func(w http.ResponseWriter, r *http.Request) {
 		sse := datastar.NewSSE(w, r)
-		t := time.NewTicker(1 * time.Millisecond)
+		t := time.NewTicker(100 * time.Millisecond)
 
 		for {
 			select {
 			case <-r.Context().Done():
 				return
 			case <-t.C:
-				c := chatMessageFragment(ui.messages...)
+				log.Print("tick")
+				msgs := ui.currentMessages()
+				c := chatMessageFragment(msgs...)
 				sse.MergeFragmentTempl(c)
 			}
 		}
@@ -91,10 +124,15 @@ func (ui *WebUI) Run() error {
 func (ui *WebUI) SetApp(app *app.App) {
 	ui.app = app
 	ui.loadContacts()
+
+	contacts := app.Contacts()
+	if len(contacts) > 0 {
+		ui.visibleUser = contacts[0].ID
+		log.Printf("Default contact: %s\n", ui.visibleUser.Hex())
+	}
 }
 
 func (ui *WebUI) WriteText(msg app.Message) {
-	ui.messages = append(ui.messages, msg)
 
 	switch msg.ID {
 	case common.Address{}:
@@ -142,13 +180,6 @@ func (ui *WebUI) loadContacts() {
 	}
 	for _, user := range ui.app.Contacts() {
 		ui.usernames[user.ID] = user.Name
-
-		u, err := ui.app.QueryContactByID(user.ID)
-		if err != nil {
-			log.Printf("query contact: %s", err)
-		}
-
-		ui.messages = append(ui.messages, u.Messages...)
 	}
 }
 
