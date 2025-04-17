@@ -201,7 +201,7 @@ func (app *App) ReceiveCapMessage(conn *websocket.Conn) {
 		// -----------------------------------------------------------------
 
 		expNonce := user.LastNonce + 1
-		if inMsg.From.Nonce != expNonce {
+		if inMsg.From.Nonce >= expNonce {
 			app.ui.WriteText(errorMessage("invalid nonce: possible security issue with contact: got: %d, exp: %d", inMsg.From.Nonce, expNonce))
 			return
 		}

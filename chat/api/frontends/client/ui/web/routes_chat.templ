@@ -17,6 +17,7 @@ templ PageChat(ui *WebUI, messages ...app.Message) {
 			// <meta http-equiv="refresh" content="5"/>
 			<title>USDL Chat + Datastar</title>
 			<link rel="stylesheet" href="/static/site.css"/>
+			<script src="https://code.iconify.design/iconify-icon/2.1.0/iconify-icon.min.js"></script>
 			<script type="module" src="https://cdn.jsdelivr.net/gh/starfederation/datastar@1.0.0-beta.11/bundles/datastar.js"></script>
 		</head>
 		<body data-on-load="@get('/chat/updates')">
@@ -27,14 +28,34 @@ templ PageChat(ui *WebUI, messages ...app.Message) {
 
 templ ChatFragment(ui *WebUI, messages ...app.Message) {
 	<div id="chat">
-		<div class="users">
-			<h2>Users</h2>
-			if len(ui.usernames) == 0 {
-				<div class="user">
-					No users found
-				</div>
-			} else {
-				{{
+		@usersFragment(ui)
+		<div class="rightPane">
+			<h2>My ID: { prettyPrintHex(ui.myAccountID) }</h2>
+			@chatMessageFragment(messages...)
+			<div class="inputs">
+				<input
+					id="message"
+					type="text"
+					placeholder="Type your message here..."
+					data-bind-message
+				/>
+				<button data-on-click={ datastar.PostSSE("/chat/sendMessage") }>
+					Submit
+				</button>
+			</div>
+		</div>
+	</div>
+}
+
+templ usersFragment(ui *WebUI) {
+	<div class="users">
+		<h2>Users</h2>
+		if len(ui.usernames) == 0 {
+			<div class="user">
+				No users found
+			</div>
+		} else {
+			{{
 					type User struct {
 						ID    common.Address
 						Label string
@@ -50,25 +71,19 @@ templ ChatFragment(ui *WebUI, messages ...app.Message) {
 					slices.SortFunc(sortedUsers, func(a, b User) int {
 						return strings.Compare(a.Label, b.Label)
 					})
-				}}
-				for _, u := range sortedUsers {
-					<div
-						class="user"
-						data-on-click={ datastar.PostSSE("/chat/changeUser/%s", u.ID.Hex()) }
-					>
-						{ u.Label }
-					</div>
-				}
+			}}
+			for _, u := range sortedUsers {
+				<div
+					class={ "user", templ.KV("active", u.ID == ui.visibleUser) }
+					data-on-click={ datastar.PostSSE("/chat/changeUser/%s", u.ID.Hex()) }
+				>
+					{ u.Label }
+					if ui.HasUnseenMessage[u.ID] {
+						@icon("material-symbols:add-alert")
+					}
+				</div>
 			}
-		</div>
-		<div class="rightPane">
-			<h2>My ID: { prettyPrintHex(ui.myAccountID) }</h2>
-			@chatMessageFragment(messages...)
-			<div class="inputs">
-				<input type="text" placeholder="Type your message here..."/>
-				<button>Submit</button>
-			</div>
-		</div>
+		}
 	</div>
 }
 
@@ -82,7 +97,6 @@ templ chatMessageFragment(messages ...app.Message) {
 			for _, msg := range messages {
 				<div class="message">
 					<div class="user">
-						// <img src="https://i.pravatar.cc/300" alt="User Avatar"/>
 						{ prettyPrintUser(msg.ID, msg.Name) }
 					</div>
 					<div class="text">{ string(msg.Content) }</div>
@@ -90,4 +104,8 @@ templ chatMessageFragment(messages ...app.Message) {
 			}
 		}
 	</div>
+}
+
+templ icon(icon string) {
+	<iconify-icon icon={ icon } noobserver></iconify-icon>
 }

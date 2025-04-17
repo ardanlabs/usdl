@@ -23,19 +23,19 @@ var staticFS embed.FS
 var staticSys = hashfs.NewFS(staticFS)
 
 type WebUI struct {
-	app         *app.App
-	usernames   map[common.Address]string
-	myAccountID common.Address
-
-	visibleUser common.Address
+	app              *app.App
+	usernames        map[common.Address]string
+	HasUnseenMessage map[common.Address]bool
+	myAccountID      common.Address
+	visibleUser      common.Address
 }
 
 func New(myAccountID common.Address) *WebUI {
 	ui := &WebUI{
-		usernames:   map[common.Address]string{},
-		myAccountID: myAccountID,
+		usernames:        map[common.Address]string{},
+		myAccountID:      myAccountID,
+		HasUnseenMessage: map[common.Address]bool{},
 	}
-
 	ui.loadContacts()
 	return ui
 }
@@ -91,8 +91,20 @@ func (ui *WebUI) Run() error {
 			return
 		}
 
+		ui.HasUnseenMessage[id] = false
 		ui.visibleUser = id
+	})
 
+	router.Post("/chat/sendMessage", func(w http.ResponseWriter, r *http.Request) {
+		type Store struct {
+			Message string `json:"message"`
+		}
+		store := &Store{}
+		if err := datastar.ReadSignals(r, store); err != nil {
+			http.Error(w, fmt.Sprintf("reading signals: %s", err), http.StatusBadRequest)
+			return
+		}
+		ui.app.SendMessageHandler(ui.visibleUser, []byte(store.Message))
 	})
 
 	router.Get("/chat/updates", func(w http.ResponseWriter, r *http.Request) {
@@ -104,10 +116,8 @@ func (ui *WebUI) Run() error {
 			case <-r.Context().Done():
 				return
 			case <-t.C:
-				log.Print("tick")
 				msgs := ui.currentMessages()
-				c := chatMessageFragment(msgs...)
-				sse.MergeFragmentTempl(c)
+				sse.MergeFragmentTempl(ChatFragment(ui, msgs...))
 			}
 		}
 	})
@@ -133,41 +143,10 @@ func (ui *WebUI) SetApp(app *app.App) {
 }
 
 func (ui *WebUI) WriteText(msg app.Message) {
-
-	switch msg.ID {
-	case common.Address{}:
-		fmt.Fprintln(os.Stdout, "-----")
-		fmt.Fprintf(os.Stdout, "%s: %s\n", msg.Name, string(msg.Content))
-
-	case ui.app.ID():
-		fmt.Fprintln(os.Stdout, "-----")
-		fmt.Fprintf(os.Stdout, "%s: %s\n", msg.Name, string(msg.Content))
-
-	default:
-		// idx := ui.list.GetCurrentItem()
-
-		// _, currentID := ui.list.GetItemText(idx)
-		// if currentID == "" {
-		// 	fmt.Fprintln(os.Stdout, "-----")
-		// 	fmt.Fprintln(os.Stdout, "id not found: "+msg.ID.Hex())
-		// 	return
-		// }
-
-		// if msg.ID.Hex() == currentID {
-		// 	fmt.Fprintln(os.Stdout, "-----")
-		// 	fmt.Fprintf(os.Stdout, "%s: %s\n", msg.Name, string(msg.Content))
-		// 	return
-		// }
-
-		// for i := range ui.list.GetItemCount() {
-		// 	name, idStr := ui.list.GetItemText(i)
-		// 	if msg.ID.Hex() == idStr {
-		// 		ui.list.SetItemText(i, "* "+name, idStr)
-		// 		ui.tviewApp.Draw()
-		// 		return
-		// 	}
-		// }
+	if msg.ID != ui.visibleUser {
+		ui.HasUnseenMessage[msg.ID] = true
 	}
+
 }
 
 func (ui *WebUI) UpdateContact(id common.Address, name string) {
