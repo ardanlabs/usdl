@@ -1,0 +1,149 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>USDL Chat + Datastar</title>
+  <style>
+    @import "https://unpkg.com/open-props";
+    @import "https://unpkg.com/open-props/normalize.min.css";
+    @import "https://unpkg.com/open-props/buttons.min.css";
+
+
+    .chat {
+      display: flex;
+      height: 100vh;
+      width: 100vw;
+
+      gap: var(--size-8);
+      padding: var(--size-4);
+
+      .users {
+        display: flex;
+        flex-direction: column;
+        min-width: 400px;
+        background-color: var(--gray-11);
+        padding: var(--size-4);
+        border-radius: var(--radius-3);
+      }
+
+      .rightPane {
+        display: flex;
+        flex-direction: column;
+        flex-grow: 1;
+        gap: var(--size-4);
+      }
+
+      .messages {
+        flex: 1;
+        width: 100%;
+        display: flex;
+        flex-direction: column;
+        flex-grow: 1;
+        background-color: var(--gray-11);
+        padding: var(--size-4);
+        border-radius: var(--radius-3);
+        gap: var(--size-4);
+
+        .message {
+          display: flex;
+          flex-direction: column;
+          gap: var(--size-2);
+          margin-bottom: var(--size-4);
+
+          img {
+            width: 50px;
+            height: 50px;
+            border-radius: var(--radius-round);
+            box-shadow: var(--shadow-3);
+          }
+
+          .user {
+            display: flex;
+            align-items: center;
+            font-size: var(--font-size-2);
+            gap: var(--size-2);
+            font-weight: bold;
+            color: var(--gray-9);
+          }
+
+          .text {
+            background-color: var(--gray-9);
+            padding: var(--size-4);
+            border-radius: var(--radius-3);
+            color: var(--white);
+          }
+        }
+      }
+
+      .inputs {
+        display: flex;
+        gap: var(--size-4);
+        align-items: center;
+
+        input {
+          flex-grow: 1;
+          padding: var(--size-4);
+          border-radius: var(--radius-3);
+          border: 1px solid var(--gray-7);
+          background-color: var(--gray-11);
+        }
+
+        button {
+          padding: var(--size-4);
+        }
+      }
+    }
+  </style>
+</head>
+
+<body>
+  <div class="chat">
+    <div class="users">
+      <h2>Users</h2>
+      <div class="user">
+        Kevin 0xc237
+      </div>
+      <div class="user">
+        Kevin 0xc237
+      </div>
+      <div class="user">
+        Kevin 0xc237
+      </div>
+    </div>
+    <div class="rightPane">
+      <h2>My ID: 0x014</h2>
+      <div class="messages">
+        <div class="message">
+          <div class="user">
+            <img src="https://i.pravatar.cc/300" alt="User Avatar" />
+            Kevin 0xc237
+          </div>
+          <div class="text">Hello, how are you?</div>
+        </div>
+        <div class="message">
+          <div class="user">
+            <img src="https://i.pravatar.cc/300" alt="User Avatar" />
+            Kevin 0xc237
+          </div>
+          <div class="text">Hello, how are you?</div>
+        </div>
+        <div class="message">
+          <div class="user">
+            <img src="https://i.pravatar.cc/300" alt="User Avatar" />
+            Kevin 0xc237
+          </div>
+          <div class="text">Hello, how are you?</div>
+        </div>
+      </div>
+      <div class="inputs">
+        <input type="text" placeholder="Type your message here..." />
+        <button>Submit</button>
+      </div>
+    </div>
+  </div>
+  </div>
+</body>
+
+</html>

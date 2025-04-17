@@ -33,12 +33,17 @@ func run() error {
 	}
 
 	// -------------------------------------------------------------------------
+	//ctx := context.Background()
 
 	ui := tui.New(id.MyAccountID)
+	// ui, err := web.New(ctx, id.MyAccountID)
+	// if err != nil {
+	// 	return fmt.Errorf("ui: %w", err)
+	// }
 
 	// -------------------------------------------------------------------------
 
-	app := app.NewApp(db, ui, id, url)
+	app := app.NewApp(db, id, url, ui)
 	defer app.Close()
 
 	ui.SetApp(app)

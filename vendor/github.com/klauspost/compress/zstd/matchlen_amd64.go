@@ -4,7 +4,7 @@
 // Copyright 2019+ Klaus Post. All rights reserved.
 // License information can be found in the LICENSE file.
 
-package flate
+package zstd
 
 // matchLen returns how many bytes match in a and b
 //

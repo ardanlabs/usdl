@@ -1,0 +1,117 @@
+@import "https://unpkg.com/open-props";
+@import "https://unpkg.com/open-props/normalize.min.css";
+@import "https://unpkg.com/open-props/buttons.min.css";
+
+#chat {
+    display: flex;
+    height: 100vh;
+    width: 100vw;
+
+    gap: var(--size-8);
+    padding: var(--size-4);
+
+    .users {
+        display: flex;
+        flex-direction: column;
+        min-width: 400px;
+        background-color: var(--gray-11);
+        padding: var(--size-4);
+        border-radius: var(--radius-3);
+        gap: var(--size-2);
+
+        .user {
+            color: var(--gray-7);
+            background-color: var(--gray-9);
+            border-radius: var(--radius-1);
+            padding: var(--size-2) var(--size-4);
+            font-size: var(--font-size-3);
+            font-weight: bold;
+
+            display: flex;
+            align-items: center;
+            gap: var(--size-2);
+            justify-content: space-between;
+
+            &:hover {
+                background-color: var(--gray-8);
+                color: var(--gray-1);
+                cursor: pointer;
+            }
+
+        }
+
+        .user.active {
+            color: var(--blue-9);
+            background-color: var(--blue-1);
+        }
+    }
+
+    .rightPane {
+        display: flex;
+        flex-direction: column;
+        flex-grow: 1;
+        gap: var(--size-4);
+        overflow: hidden;
+    }
+
+    #messages {
+        flex: 1;
+        width: 100%;
+        display: flex;
+        flex-direction: column;
+        flex-grow: 1;
+        background-color: var(--gray-11);
+        padding: var(--size-4);
+        border-radius: var(--radius-3);
+        gap: var(--size-4);
+        overflow: auto;
+
+        .message {
+            display: flex;
+            flex-direction: column;
+            gap: var(--size-2);
+            margin-bottom: var(--size-4);
+
+            img {
+                width: 50px;
+                height: 50px;
+                border-radius: var(--radius-round);
+                box-shadow: var(--shadow-3);
+            }
+
+            .user {
+                display: flex;
+                align-items: center;
+                font-size: var(--font-size-2);
+                gap: var(--size-2);
+                font-weight: bold;
+                color: var(--gray-9);
+            }
+
+            .text {
+                background-color: var(--gray-9);
+                padding: var(--size-4);
+                border-radius: var(--radius-3);
+                color: var(--white);
+            }
+        }
+    }
+
+    .inputs {
+        display: flex;
+        gap: var(--size-4);
+        align-items: center;
+
+        input {
+            flex-grow: 1;
+            padding: var(--size-4);
+            border-radius: var(--radius-3);
+            border: 1px solid var(--gray-7);
+            background-color: var(--gray-11);
+        }
+
+        button {
+            padding: var(--size-4);
+        }
+    }
+}

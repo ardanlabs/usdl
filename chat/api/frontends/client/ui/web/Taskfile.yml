@@ -1,0 +1,48 @@
+# https://taskfile.dev
+
+
+version: "3"
+
+interval: 250ms
+
+tasks:
+  tools:
+    cmds:
+      - go install github.com/go-task/task/v3/cmd/task@latest
+      - go install github.com/a-h/templ/cmd/templ@latest
+
+  templ:
+    env:
+      TEMPL_EXPERIMENT: rawgo
+    sources:
+      - "**/*.templ"
+    generates:
+      - "**/*_templ.go"
+    cmds:
+      - templ generate .
+
+  kill:
+    method: none
+    cmds:
+      - fuser -k 1337/tcp > /dev/null 2>&1 || true
+
+
+  site:
+    method: none
+    desc: build and run site
+    deps:
+      - kill
+      - templ
+    sources:
+      - "**/*.go"
+      - static/**/*
+    generates:
+      - ./usdl_client_bin
+    cmds:
+      - go mod tidy
+      - go build -o ./usdl_client_bin ../../main.go
+
+  default:
+    cmds:
+      - task: site
+      - ./usdl_client_bin
