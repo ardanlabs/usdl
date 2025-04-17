@@ -28,6 +28,8 @@ type WebUI struct {
 	HasUnseenMessage map[common.Address]bool
 	myAccountID      common.Address
 	visibleUser      common.Address
+
+	messages map[common.Address][]app.Message
 }
 
 func New(myAccountID common.Address) *WebUI {
@@ -35,6 +37,7 @@ func New(myAccountID common.Address) *WebUI {
 		usernames:        map[common.Address]string{},
 		myAccountID:      myAccountID,
 		HasUnseenMessage: map[common.Address]bool{},
+		messages:         map[common.Address][]app.Message{},
 	}
 	ui.loadContacts()
 	return ui
