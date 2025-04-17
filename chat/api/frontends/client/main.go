@@ -1,13 +1,12 @@
 package main
 
 import (
-	"context"
 	"fmt"
 	"os"
 
 	"github.com/ardanlabs/usdl/chat/api/frontends/client/app"
 	"github.com/ardanlabs/usdl/chat/api/frontends/client/storage/dbfile"
-	"github.com/ardanlabs/usdl/chat/api/frontends/client/ui/web"
+	"github.com/ardanlabs/usdl/chat/api/frontends/client/ui/tui"
 )
 
 const (
@@ -34,13 +33,13 @@ func run() error {
 	}
 
 	// -------------------------------------------------------------------------
-	ctx := context.Background()
+	//ctx := context.Background()
 
-	// ui := tui.New(id.MyAccountID)
-	ui, err := web.New(ctx, id.MyAccountID)
-	if err != nil {
-		return fmt.Errorf("ui: %w", err)
-	}
+	ui := tui.New(id.MyAccountID)
+	// ui, err := web.New(ctx, id.MyAccountID)
+	// if err != nil {
+	// 	return fmt.Errorf("ui: %w", err)
+	// }
 
 	// -------------------------------------------------------------------------
 

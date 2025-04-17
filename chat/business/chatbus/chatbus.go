@@ -231,7 +231,7 @@ func (c *Business) listenBus() func(msg jetstream.Msg) {
 			return
 		}
 
-		c.log.Info(ctx, "BUS: msg recv", "fromNonce", busMsg.FromNonce, "from", busMsg.FromID, "to", "encrypted", busMsg.Encrypted, busMsg.ToID, "message", busMsg.Msg, "fromName", busMsg.FromName)
+		c.log.Info(ctx, "BUS: msg recv", "fromNonce", busMsg.FromNonce, "from", busMsg.FromID, "to", busMsg.ToID, "encrypted", busMsg.Encrypted, "message", busMsg.Msg, "fromName", busMsg.FromName)
 
 		dataThatWasSign := struct {
 			ToID      common.Address
