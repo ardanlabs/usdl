@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"os"
 
@@ -33,9 +34,13 @@ func run() error {
 	}
 
 	// -------------------------------------------------------------------------
+	ctx := context.Background()
 
 	// ui := tui.New(id.MyAccountID)
-	ui := web.New(id.MyAccountID)
+	ui, err := web.New(ctx, id.MyAccountID)
+	if err != nil {
+		return fmt.Errorf("ui: %w", err)
+	}
 
 	// -------------------------------------------------------------------------
 
