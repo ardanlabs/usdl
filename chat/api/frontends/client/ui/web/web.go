@@ -1,19 +1,21 @@
 package web
 
 import (
+	"context"
 	"embed"
 	"fmt"
 	"log"
 	"net/http"
 	"os"
 	"strconv"
-	"time"
 
 	"github.com/ardanlabs/usdl/chat/api/frontends/client/app"
 	"github.com/benbjohnson/hashfs"
+	"github.com/delaneyj/toolbelt/embeddednats"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
+	"github.com/nats-io/nats.go"
 	datastar "github.com/starfederation/datastar/sdk/go"
 )
 
@@ -22,25 +24,43 @@ var staticFS embed.FS
 
 var staticSys = hashfs.NewFS(staticFS)
 
+const webUpdateSubject = "web.update"
+
 type WebUI struct {
 	app              *app.App
 	usernames        map[common.Address]string
 	HasUnseenMessage map[common.Address]bool
 	myAccountID      common.Address
 	visibleUser      common.Address
-
-	messages map[common.Address][]app.Message
+	ns               *embeddednats.Server
+	nc               *nats.Conn
+	messages         map[common.Address][]app.Message
 }
 
-func New(myAccountID common.Address) *WebUI {
+func New(ctx context.Context, myAccountID common.Address) (*WebUI, error) {
+	ns, err := embeddednats.New(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("starting NATS server: %w", err)
+	}
+	ns.WaitForServer()
+
+	nc, err := ns.Client()
+	if err != nil {
+		return nil, fmt.Errorf("connecting to NATS server: %w", err)
+	}
+
 	ui := &WebUI{
 		usernames:        map[common.Address]string{},
 		myAccountID:      myAccountID,
 		HasUnseenMessage: map[common.Address]bool{},
+		ns:               ns,
+		nc:               nc,
 		messages:         map[common.Address][]app.Message{},
 	}
+
 	ui.loadContacts()
-	return ui
+
+	return ui, nil
 }
 
 var zeroUser common.Address
@@ -57,7 +77,6 @@ func (ui *WebUI) currentMessages() []app.Message {
 }
 
 func (ui *WebUI) Run() error {
-
 	portRaw := os.Getenv("PORT")
 	if portRaw == "" {
 		portRaw = "1337"
@@ -96,6 +115,8 @@ func (ui *WebUI) Run() error {
 
 		ui.HasUnseenMessage[id] = false
 		ui.visibleUser = id
+
+		ui.nc.Publish(webUpdateSubject, []byte("update"))
 	})
 
 	router.Post("/chat/sendMessage", func(w http.ResponseWriter, r *http.Request) {
@@ -112,13 +133,22 @@ func (ui *WebUI) Run() error {
 
 	router.Get("/chat/updates", func(w http.ResponseWriter, r *http.Request) {
 		sse := datastar.NewSSE(w, r)
-		t := time.NewTicker(100 * time.Millisecond)
+
+		ch := make(chan *nats.Msg, 1)
+		defer close(ch)
+
+		sub, err := ui.nc.ChanSubscribe(webUpdateSubject, ch)
+		if err != nil {
+			http.Error(w, fmt.Sprintf("subscribing to %s: %s", webUpdateSubject, err), http.StatusInternalServerError)
+			return
+		}
+		defer sub.Unsubscribe()
 
 		for {
 			select {
 			case <-r.Context().Done():
 				return
-			case <-t.C:
+			case <-ch:
 				msgs := ui.currentMessages()
 				sse.MergeFragmentTempl(ChatFragment(ui, msgs...))
 			}
@@ -150,6 +180,8 @@ func (ui *WebUI) WriteText(msg app.Message) {
 		ui.HasUnseenMessage[msg.ID] = true
 	}
 
+	ui.messages[msg.ID] = append(ui.messages[msg.ID], msg)
+	ui.nc.Publish(webUpdateSubject, []byte("update"))
 }
 
 func (ui *WebUI) UpdateContact(id common.Address, name string) {
