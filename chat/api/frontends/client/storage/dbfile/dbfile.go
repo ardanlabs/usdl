@@ -68,31 +68,51 @@ func (c *DB) Contacts() []app.User {
 }
 
 func (db *DB) QueryContactByID(id common.Address) (app.User, error) {
-	db.mu.RLock()
-	defer db.mu.RUnlock()
+	u, err := func() (app.User, error) {
+		db.mu.RLock()
+		defer db.mu.RUnlock()
 
-	u, exists := db.contacts[id]
-	if !exists {
-		return app.User{}, fmt.Errorf("contact not found")
+		u, exists := db.contacts[id]
+		if !exists {
+			return app.User{}, fmt.Errorf("contact not found")
+		}
+
+		return u, nil
+	}()
+
+	if err != nil {
+		return app.User{}, err
 	}
 
-	if len(u.Messages) == 0 {
-		msgs, err := readMsgsFromDisk(id)
-		if err != nil {
-			return app.User{}, fmt.Errorf("read messages: %w", err)
-		}
+	if len(u.Messages) > 0 {
+		return u, nil
+	}
 
-		u.Messages = make([]app.Message, len(msgs))
-		for i, msg := range msgs {
-			u.Messages[i] = app.Message{
-				Name:        msg.Name,
-				Content:     msg.Content,
-				DateCreated: msg.DateCreated.Local(),
-			}
-		}
+	// -------------------------------------------------------------------------
 
+	msgs, err := readMsgsFromDisk(id)
+	if err != nil {
+		return app.User{}, fmt.Errorf("read messages: %w", err)
+	}
+
+	messages := make([]app.Message, len(msgs))
+	for i, msg := range msgs {
+		messages[i] = app.Message{
+			Name:        msg.Name,
+			Content:     msg.Content,
+			DateCreated: msg.DateCreated.Local(),
+		}
+	}
+
+	// -------------------------------------------------------------------------
+
+	func() {
+		db.mu.Lock()
+		defer db.mu.Unlock()
+
+		u.Messages = messages
 		db.contacts[id] = u
-	}
+	}()
 
 	return u, nil
 }

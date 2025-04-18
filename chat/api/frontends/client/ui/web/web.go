@@ -38,7 +38,7 @@ type WebUI struct {
 }
 
 func New(ctx context.Context, myAccountID common.Address) (*WebUI, error) {
-	ns, err := embeddednats.New(ctx)
+	ns, err := embeddednats.New(ctx, embeddednats.WithDirectory("./chat/zarf/data/nats"))
 	if err != nil {
 		return nil, fmt.Errorf("starting NATS server: %w", err)
 	}
@@ -149,6 +149,9 @@ func (ui *WebUI) Run() error {
 			case <-r.Context().Done():
 				return
 			case <-ch:
+				// It's possible a message came in that is not written to
+				// storage. We need to deal with that.
+
 				msgs := ui.currentMessages()
 				sse.MergeFragmentTempl(ChatFragment(ui, msgs...))
 			}
@@ -179,6 +182,10 @@ func (ui *WebUI) WriteText(msg app.Message) {
 	if msg.ID != ui.visibleUser {
 		ui.HasUnseenMessage[msg.ID] = true
 	}
+
+	// Not all messages are written to storage because it can be an error.
+	// We need to deal with that. The current ui.messages are not really
+	// being used at this time.
 
 	ui.messages[msg.ID] = append(ui.messages[msg.ID], msg)
 	ui.nc.Publish(webUpdateSubject, []byte("update"))

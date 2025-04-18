@@ -2,6 +2,11 @@
 SHELL_PATH = /bin/ash
 SHELL = $(if $(wildcard $(SHELL_PATH)),/bin/ash,/bin/bash)
 
+install:
+	go install github.com/go-task/task/v3/cmd/task@latest
+	go install github.com/a-h/templ/cmd/templ@latest
+	brew install entr
+
 # ==============================================================================
 # Chat
 
@@ -12,7 +17,13 @@ run-cap:
 	go run chat/api/services/cap/main.go | go run chat/api/tooling/logfmt/main.go
 
 run-client:
+	templ generate chat/api/frontends/client/ui/web/
 	go run chat/api/frontends/client/main.go
+
+run-client-reload:
+	find . -name "*.go" -o -name "*.html" -o -name "*.css" | entr -r go run chat/api/frontends/client/main.go & \
+	find . -name "*.templ" | entr -r templ generate chat/api/frontends/client/ui/web/ & \
+	wait;
 
 chat-test:
 	curl -i -X GET http://localhost:3000/test
