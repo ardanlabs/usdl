@@ -24,16 +24,20 @@ import (
 )
 
 /*
-	DataStar Client (Thursday)
+	Refactor Project Structure
+		- Move everything out to the root of the project
+		- Create a Datastar domain
+		- Move app and storage to app/sdk
+
+	Remove NATS for a peer to peer networking semantic
+		- Use HTTP or SSE to establish communication
+		- Maintain local DB of existing CAP services
+		- We record what the CAP ID is for a user
+		- We record what the CAP ID is for a group
+			- We know that can change over time
 
 	AI agent mode
 		- Ollama model server
-
-	Private Stream
-		- Between 2 people
-		- Same stream providing message caching
-		- The name is random but predictable
-			- Provide a default name in config
 
 	Group Chat
 		- Allow users to create groups
