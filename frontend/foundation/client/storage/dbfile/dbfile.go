@@ -6,13 +6,13 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ardanlabs/usdl/frontend/foundation/app"
+	"github.com/ardanlabs/usdl/frontend/foundation/client"
 	"github.com/ethereum/go-ethereum/common"
 )
 
 type DB struct {
-	myAccount app.MyAccount
-	contacts  map[common.Address]app.User
+	myAccount client.MyAccount
+	contacts  map[common.Address]client.User
 	mu        sync.RWMutex
 }
 
@@ -22,9 +22,9 @@ func NewDB(filePath string, myAccountID common.Address) (*DB, error) {
 		return nil, fmt.Errorf("newDB: %w", err)
 	}
 
-	contacts := make(map[common.Address]app.User, len(df.Contacts))
+	contacts := make(map[common.Address]client.User, len(df.Contacts))
 	for _, usr := range df.Contacts {
-		contacts[usr.ID] = app.User{
+		contacts[usr.ID] = client.User{
 			ID:           usr.ID,
 			Name:         usr.Name,
 			AppLastNonce: usr.AppLastNonce,
@@ -34,7 +34,7 @@ func NewDB(filePath string, myAccountID common.Address) (*DB, error) {
 	}
 
 	db := DB{
-		myAccount: app.MyAccount{
+		myAccount: client.MyAccount{
 			ID:   df.MyAccount.ID,
 			Name: df.MyAccount.Name,
 		},
@@ -44,18 +44,18 @@ func NewDB(filePath string, myAccountID common.Address) (*DB, error) {
 	return &db, nil
 }
 
-func (c *DB) MyAccount() app.MyAccount {
+func (c *DB) MyAccount() client.MyAccount {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 
 	return c.myAccount
 }
 
-func (c *DB) Contacts() []app.User {
+func (c *DB) Contacts() []client.User {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 
-	users := make([]app.User, 0, len(c.contacts))
+	users := make([]client.User, 0, len(c.contacts))
 	for _, user := range c.contacts {
 		users = append(users, user)
 	}
@@ -67,21 +67,21 @@ func (c *DB) Contacts() []app.User {
 	return users
 }
 
-func (db *DB) QueryContactByID(id common.Address) (app.User, error) {
-	u, err := func() (app.User, error) {
+func (db *DB) QueryContactByID(id common.Address) (client.User, error) {
+	u, err := func() (client.User, error) {
 		db.mu.RLock()
 		defer db.mu.RUnlock()
 
 		u, exists := db.contacts[id]
 		if !exists {
-			return app.User{}, fmt.Errorf("contact not found")
+			return client.User{}, fmt.Errorf("contact not found")
 		}
 
 		return u, nil
 	}()
 
 	if err != nil {
-		return app.User{}, err
+		return client.User{}, err
 	}
 
 	if len(u.Messages) > 0 {
@@ -92,12 +92,12 @@ func (db *DB) QueryContactByID(id common.Address) (app.User, error) {
 
 	msgs, err := readMsgsFromDisk(id)
 	if err != nil {
-		return app.User{}, fmt.Errorf("read messages: %w", err)
+		return client.User{}, fmt.Errorf("read messages: %w", err)
 	}
 
-	messages := make([]app.Message, len(msgs))
+	messages := make([]client.Message, len(msgs))
 	for i, msg := range msgs {
-		messages[i] = app.Message{
+		messages[i] = client.Message{
 			Name:        msg.Name,
 			Content:     msg.Content,
 			DateCreated: msg.DateCreated.Local(),
@@ -117,14 +117,14 @@ func (db *DB) QueryContactByID(id common.Address) (app.User, error) {
 	return u, nil
 }
 
-func (db *DB) InsertContact(id common.Address, name string) (app.User, error) {
+func (db *DB) InsertContact(id common.Address, name string) (client.User, error) {
 	db.mu.Lock()
 	defer db.mu.Unlock()
 
 	// -------------------------------------------------------------------------
 	// Update in the in-memory cache of contacts.
 
-	db.contacts[id] = app.User{
+	db.contacts[id] = client.User{
 		ID:   id,
 		Name: name,
 	}
@@ -134,7 +134,7 @@ func (db *DB) InsertContact(id common.Address, name string) (app.User, error) {
 
 	df, err := readDBFromDisk()
 	if err != nil {
-		return app.User{}, fmt.Errorf("config read: %w", err)
+		return client.User{}, fmt.Errorf("config read: %w", err)
 	}
 
 	dfu := dataFileUser{
@@ -149,7 +149,7 @@ func (db *DB) InsertContact(id common.Address, name string) (app.User, error) {
 	// -------------------------------------------------------------------------
 	// Return the new contact.
 
-	u := app.User{
+	u := client.User{
 		ID:   id,
 		Name: name,
 	}
@@ -157,7 +157,7 @@ func (db *DB) InsertContact(id common.Address, name string) (app.User, error) {
 	return u, nil
 }
 
-func (db *DB) InsertMessage(id common.Address, msg app.Message) error {
+func (db *DB) InsertMessage(id common.Address, msg client.Message) error {
 	db.mu.Lock()
 	defer db.mu.Unlock()
 

@@ -3,7 +3,7 @@ package ui
 import (
 	"fmt"
 
-	"github.com/ardanlabs/usdl/frontend/foundation/app"
+	"github.com/ardanlabs/usdl/frontend/foundation/client"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/gdamore/tcell/v2"
 	"github.com/rivo/tview"
@@ -18,7 +18,7 @@ type TUI struct {
 	textView *tview.TextView
 	textArea *tview.TextArea
 	button   *tview.Button
-	app      *app.App
+	app      *client.App
 }
 
 func New(myAccountID common.Address) *TUI {
@@ -131,7 +131,7 @@ func New(myAccountID common.Address) *TUI {
 	return &ui
 }
 
-func (ui *TUI) SetApp(app *app.App) {
+func (ui *TUI) SetApp(app *client.App) {
 	ui.app = app
 
 	for i, user := range app.Contacts() {
@@ -144,7 +144,7 @@ func (ui *TUI) Run() error {
 	return ui.tviewApp.SetRoot(ui.flex, true).EnableMouse(true).Run()
 }
 
-func (ui *TUI) WriteText(msg app.Message) {
+func (ui *TUI) WriteText(msg client.Message) {
 	ui.textView.ScrollToEnd()
 
 	switch msg.ID {
@@ -201,7 +201,7 @@ func (ui *TUI) buttonHandler() {
 	id := common.HexToAddress(to)
 
 	if err := ui.app.SendMessageHandler(id, []byte(msg)); err != nil {
-		msg := app.Message{
+		msg := client.Message{
 			Name:    "system",
 			Content: fmt.Appendf(nil, "Error sending message: %s", err),
 		}

@@ -1,5 +1,5 @@
-// Package app provides client app support.
-package app
+// Package client provides client app support.
+package client
 
 import (
 	"crypto/rand"

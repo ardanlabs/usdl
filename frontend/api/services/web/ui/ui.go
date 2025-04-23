@@ -9,7 +9,7 @@ import (
 	"os"
 	"strconv"
 
-	"github.com/ardanlabs/usdl/frontend/foundation/app"
+	"github.com/ardanlabs/usdl/frontend/foundation/client"
 	"github.com/benbjohnson/hashfs"
 	"github.com/delaneyj/toolbelt/embeddednats"
 	"github.com/ethereum/go-ethereum/common"
@@ -27,14 +27,14 @@ var staticSys = hashfs.NewFS(staticFS)
 const webUpdateSubject = "web.update"
 
 type WebUI struct {
-	app              *app.App
+	app              *client.App
 	usernames        map[common.Address]string
 	HasUnseenMessage map[common.Address]bool
 	myAccountID      common.Address
 	visibleUser      common.Address
 	ns               *embeddednats.Server
 	nc               *nats.Conn
-	messages         map[common.Address][]app.Message
+	messages         map[common.Address][]client.Message
 }
 
 func New(ctx context.Context, myAccountID common.Address) (*WebUI, error) {
@@ -55,7 +55,7 @@ func New(ctx context.Context, myAccountID common.Address) (*WebUI, error) {
 		HasUnseenMessage: map[common.Address]bool{},
 		ns:               ns,
 		nc:               nc,
-		messages:         map[common.Address][]app.Message{},
+		messages:         map[common.Address][]client.Message{},
 	}
 
 	ui.loadContacts()
@@ -65,7 +65,7 @@ func New(ctx context.Context, myAccountID common.Address) (*WebUI, error) {
 
 var zeroUser common.Address
 
-func (ui *WebUI) currentMessages() []app.Message {
+func (ui *WebUI) currentMessages() []client.Message {
 	if ui.visibleUser == zeroUser {
 		return nil
 	}
@@ -167,7 +167,7 @@ func (ui *WebUI) Run() error {
 	return srv.ListenAndServe()
 }
 
-func (ui *WebUI) SetApp(app *app.App) {
+func (ui *WebUI) SetApp(app *client.App) {
 	ui.app = app
 	ui.loadContacts()
 
@@ -178,7 +178,7 @@ func (ui *WebUI) SetApp(app *app.App) {
 	}
 }
 
-func (ui *WebUI) WriteText(msg app.Message) {
+func (ui *WebUI) WriteText(msg client.Message) {
 	if msg.ID != ui.visibleUser {
 		ui.HasUnseenMessage[msg.ID] = true
 	}

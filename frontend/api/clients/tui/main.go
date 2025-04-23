@@ -5,8 +5,8 @@ import (
 	"os"
 
 	"github.com/ardanlabs/usdl/frontend/api/clients/tui/ui"
-	"github.com/ardanlabs/usdl/frontend/foundation/app"
-	"github.com/ardanlabs/usdl/frontend/foundation/storage/dbfile"
+	"github.com/ardanlabs/usdl/frontend/foundation/client"
+	"github.com/ardanlabs/usdl/frontend/foundation/client/storage/dbfile"
 )
 
 const (
@@ -22,7 +22,7 @@ func main() {
 }
 
 func run() error {
-	id, err := app.NewID(configFilePath)
+	id, err := client.NewID(configFilePath)
 	if err != nil {
 		return fmt.Errorf("id: %w", err)
 	}
@@ -38,7 +38,7 @@ func run() error {
 
 	// -------------------------------------------------------------------------
 
-	app := app.NewApp(db, id, url, ui)
+	app := client.NewApp(db, id, url, ui)
 	defer app.Close()
 
 	ui.SetApp(app)

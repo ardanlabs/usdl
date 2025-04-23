@@ -9,14 +9,14 @@ import "github.com/a-h/templ"
 import templruntime "github.com/a-h/templ/runtime"
 
 import (
-	"github.com/ardanlabs/usdl/frontend/foundation/app"
+	"github.com/ardanlabs/usdl/frontend/foundation/client"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/starfederation/datastar/sdk/go"
 	"slices"
 	"strings"
 )
 
-func PageChat(ui *WebUI, messages ...app.Message) templ.Component {
+func PageChat(ui *WebUI, messages ...client.Message) templ.Component {
 	return templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 		templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 		if templ_7745c5c3_CtxErr := ctx.Err(); templ_7745c5c3_CtxErr != nil {
@@ -53,7 +53,7 @@ func PageChat(ui *WebUI, messages ...app.Message) templ.Component {
 	})
 }
 
-func ChatFragment(ui *WebUI, messages ...app.Message) templ.Component {
+func ChatFragment(ui *WebUI, messages ...client.Message) templ.Component {
 	return templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 		templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 		if templ_7745c5c3_CtxErr := ctx.Err(); templ_7745c5c3_CtxErr != nil {
@@ -240,7 +240,7 @@ func usersFragment(ui *WebUI) templ.Component {
 	})
 }
 
-func chatMessageFragment(messages ...app.Message) templ.Component {
+func chatMessageFragment(messages ...client.Message) templ.Component {
 	return templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 		templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 		if templ_7745c5c3_CtxErr := ctx.Err(); templ_7745c5c3_CtxErr != nil {

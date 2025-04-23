@@ -1,14 +1,14 @@
 package ui
 
 import (
-	"github.com/ardanlabs/usdl/frontend/foundation/app"
+	"github.com/ardanlabs/usdl/frontend/foundation/client"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/starfederation/datastar/sdk/go"
 	"slices"
 	"strings"
 )
 
-templ PageChat(ui *WebUI, messages ...app.Message) {
+templ PageChat(ui *WebUI, messages ...client.Message) {
 	<!DOCTYPE html>
 	<html lang="en">
 		<head>
@@ -26,7 +26,7 @@ templ PageChat(ui *WebUI, messages ...app.Message) {
 	</html>
 }
 
-templ ChatFragment(ui *WebUI, messages ...app.Message) {
+templ ChatFragment(ui *WebUI, messages ...client.Message) {
 	<div id="chat">
 		@usersFragment(ui)
 		<div class="rightPane">
@@ -87,7 +87,7 @@ templ usersFragment(ui *WebUI) {
 	</div>
 }
 
-templ chatMessageFragment(messages ...app.Message) {
+templ chatMessageFragment(messages ...client.Message) {
 	<div id="messages">
 		if len(messages) == 0 {
 			<div class="alert">
