@@ -10,7 +10,6 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/ardanlabs/usdl/backend/app/sdk/errs"
 	"github.com/ardanlabs/usdl/sdk/logger"
 	"github.com/ardanlabs/usdl/sdk/signature"
 	"github.com/ardanlabs/usdl/sdk/web"
@@ -100,7 +99,7 @@ func (c *Business) Handshake(ctx context.Context, w http.ResponseWriter, r *http
 	var ws websocket.Upgrader
 	conn, err := ws.Upgrade(w, r, nil)
 	if err != nil {
-		return User{}, errs.Newf(errs.FailedPrecondition, "unable to upgrade to websocket")
+		return User{}, fmt.Errorf("upgrade: %w", err)
 	}
 
 	if err := conn.WriteMessage(websocket.TextMessage, []byte("HELLO")); err != nil {

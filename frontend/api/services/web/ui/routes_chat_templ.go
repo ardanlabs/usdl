@@ -9,7 +9,7 @@ import "github.com/a-h/templ"
 import templruntime "github.com/a-h/templ/runtime"
 
 import (
-	"github.com/ardanlabs/usdl/frontend/app/sdk/app"
+	"github.com/ardanlabs/usdl/frontend/foundation/app"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/starfederation/datastar/sdk/go"
 	"slices"

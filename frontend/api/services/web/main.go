@@ -6,8 +6,8 @@ import (
 	"os"
 
 	"github.com/ardanlabs/usdl/frontend/api/services/web/ui"
-	"github.com/ardanlabs/usdl/frontend/app/sdk/app"
-	"github.com/ardanlabs/usdl/frontend/app/sdk/storage/dbfile"
+	"github.com/ardanlabs/usdl/frontend/foundation/app"
+	"github.com/ardanlabs/usdl/frontend/foundation/storage/dbfile"
 )
 
 const (

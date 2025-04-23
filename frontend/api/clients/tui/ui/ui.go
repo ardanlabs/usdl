@@ -3,7 +3,7 @@ package ui
 import (
 	"fmt"
 
-	"github.com/ardanlabs/usdl/frontend/app/sdk/app"
+	"github.com/ardanlabs/usdl/frontend/foundation/app"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/gdamore/tcell/v2"
 	"github.com/rivo/tview"

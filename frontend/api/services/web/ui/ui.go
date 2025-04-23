@@ -9,7 +9,7 @@ import (
 	"os"
 	"strconv"
 
-	"github.com/ardanlabs/usdl/frontend/app/sdk/app"
+	"github.com/ardanlabs/usdl/frontend/foundation/app"
 	"github.com/benbjohnson/hashfs"
 	"github.com/delaneyj/toolbelt/embeddednats"
 	"github.com/ethereum/go-ethereum/common"
