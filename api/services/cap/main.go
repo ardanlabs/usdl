@@ -15,8 +15,8 @@ import (
 
 	"github.com/ardanlabs/conf/v3"
 	"github.com/ardanlabs/usdl/app/sdk/mux"
-	"github.com/ardanlabs/usdl/business/chatbus"
-	"github.com/ardanlabs/usdl/business/chatbus/storage/usermem"
+	"github.com/ardanlabs/usdl/business/domain/chatbus"
+	"github.com/ardanlabs/usdl/business/domain/chatbus/storage/usermem"
 	"github.com/ardanlabs/usdl/foundation/logger"
 	"github.com/ardanlabs/usdl/foundation/web"
 	"github.com/google/uuid"

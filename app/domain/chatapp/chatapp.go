@@ -6,7 +6,7 @@ import (
 	"net/http"
 
 	"github.com/ardanlabs/usdl/app/sdk/errs"
-	"github.com/ardanlabs/usdl/business/chatbus"
+	"github.com/ardanlabs/usdl/business/domain/chatbus"
 	"github.com/ardanlabs/usdl/foundation/logger"
 	"github.com/ardanlabs/usdl/foundation/web"
 )

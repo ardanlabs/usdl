@@ -5,7 +5,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ardanlabs/usdl/business/chatbus"
+	"github.com/ardanlabs/usdl/business/domain/chatbus"
 	"github.com/ardanlabs/usdl/foundation/logger"
 	"github.com/ethereum/go-ethereum/common"
 )

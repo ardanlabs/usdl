@@ -7,7 +7,7 @@ import (
 
 	"github.com/ardanlabs/usdl/app/domain/chatapp"
 	"github.com/ardanlabs/usdl/app/sdk/mid"
-	"github.com/ardanlabs/usdl/business/chatbus"
+	"github.com/ardanlabs/usdl/business/domain/chatbus"
 	"github.com/ardanlabs/usdl/foundation/logger"
 	"github.com/ardanlabs/usdl/foundation/web"
 )
