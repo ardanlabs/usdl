@@ -10,21 +10,21 @@ install:
 # Chat
 
 hack:
-	go run backend/api/tooling/hack/main.go
+	go run api/tooling/hack/main.go
 
 run-cap:
-	go run backend/api/services/cap/main.go | go run backend/api/tooling/logfmt/main.go
+	go run api/services/cap/main.go | go run api/tooling/logfmt/main.go
 
 run-tui:
-	go run frontend/api/clients/tui/main.go
+	go run api/clients/tui/main.go
 
-run-web:
-	templ generate frontend/api/services/web/
-	go run frontend/api/services/web/main.go
+run-bui:
+	templ generate api/services/bui/
+	go run api/services/web/main.go
 
-run-web-reload:
-	find . -name "*.go" -o -name "*.html" -o -name "*.css" | entr -r go run frontend/api/services/web/main.go & \
-	find . -name "*.templ" | entr -r templ generate frontend/api/services/web/ & \
+run-bui-reload:
+	find . -name "*.go" -o -name "*.html" -o -name "*.css" | entr -r go run api/services/bui/main.go & \
+	find . -name "*.templ" | entr -r templ generate api/services/bui/ & \
 	wait;
 
 chat-test:
