@@ -2,7 +2,8 @@
 # https://github.com/github/gitignore/blob/main/community/Golang/Go.AllowList.gitignore
 #
 
-chat/zarf/*
+backend/zarf/*
+frontend/zarf/*
 
 # Binaries for programs and plugins
 *.exe
