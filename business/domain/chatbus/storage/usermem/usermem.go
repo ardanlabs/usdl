@@ -1,3 +1,4 @@
+// Package usermem provides a memory based user storage for the chatbus service.
 package usermem
 
 import (

@@ -1,3 +1,4 @@
+// Package dbfile provides a file based database for the client application.
 package dbfile
 
 import (
@@ -44,19 +45,19 @@ func NewDB(filePath string, myAccountID common.Address) (*DB, error) {
 	return &db, nil
 }
 
-func (c *DB) MyAccount() client.MyAccount {
-	c.mu.RLock()
-	defer c.mu.RUnlock()
+func (db *DB) MyAccount() client.MyAccount {
+	db.mu.RLock()
+	defer db.mu.RUnlock()
 
-	return c.myAccount
+	return db.myAccount
 }
 
-func (c *DB) Contacts() []client.User {
-	c.mu.RLock()
-	defer c.mu.RUnlock()
+func (db *DB) Contacts() []client.User {
+	db.mu.RLock()
+	defer db.mu.RUnlock()
 
-	users := make([]client.User, 0, len(c.contacts))
-	for _, user := range c.contacts {
+	users := make([]client.User, 0, len(db.contacts))
+	for _, user := range db.contacts {
 		users = append(users, user)
 	}
 

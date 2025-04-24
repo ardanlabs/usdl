@@ -1,3 +1,4 @@
+// Package ui provides the web UI for the application.
 package ui
 
 import (

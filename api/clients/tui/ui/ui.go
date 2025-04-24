@@ -1,3 +1,4 @@
+// Package ui provides the TUI for the application.
 package ui
 
 import (
