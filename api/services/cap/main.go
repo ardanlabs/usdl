@@ -25,8 +25,10 @@ import (
 
 /*
 	Refactor Project Structure
-		- Create a Datastar domain
-		- Move app and storage to app/sdk
+		- Fix Embedding NATS / Do it ourselves
+
+	AI agent mode
+		- Ollama model server
 
 	Remove NATS for a peer to peer networking semantic
 		- Use HTTP or SSE to establish communication
@@ -34,9 +36,6 @@ import (
 		- We record what the CAP ID is for a user
 		- We record what the CAP ID is for a group
 			- We know that can change over time
-
-	AI agent mode
-		- Ollama model server
 
 	Group Chat
 		- Allow users to create groups
