@@ -30,17 +30,15 @@ type App struct {
 	log              *logger.Logger
 	clientApp        *client.App
 	myAccountID      common.Address
-	visibleUser      common.Address
-	ns               *embeddednats.Server
 	nc               *nats.Conn
+	visibleUser      common.Address
 	usernames        map[common.Address]string
 	hasUnseenMessage map[common.Address]bool
 	messages         map[common.Address][]client.Message
 }
 
 func NewApp(log *logger.Logger, myAccountID common.Address) (*App, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
+	ctx := context.Background()
 
 	log.Info(ctx, "startup", "status", "starting NATS server")
 
@@ -61,11 +59,10 @@ func NewApp(log *logger.Logger, myAccountID common.Address) (*App, error) {
 
 	a := App{
 		log:              log,
-		usernames:        map[common.Address]string{},
 		myAccountID:      myAccountID,
-		hasUnseenMessage: map[common.Address]bool{},
-		ns:               ns,
 		nc:               nc,
+		usernames:        map[common.Address]string{},
+		hasUnseenMessage: map[common.Address]bool{},
 		messages:         map[common.Address][]client.Message{},
 	}
 

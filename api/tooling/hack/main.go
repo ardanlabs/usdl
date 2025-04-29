@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/x509"
@@ -11,6 +12,11 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"sync"
+	"time"
+
+	"github.com/delaneyj/toolbelt/embeddednats"
+	"github.com/nats-io/nats.go"
 )
 
 const filePath = "backend/zarf/client"
@@ -22,6 +28,57 @@ func main() {
 }
 
 func run() error {
+	ctx := context.Background()
+
+	ns, err := embeddednats.New(ctx, embeddednats.WithDirectory("zarf/data/nats"))
+	if err != nil {
+		return fmt.Errorf("starting NATS server: %w", err)
+	}
+	ns.WaitForServer()
+
+	nc, err := ns.Client()
+	if err != nil {
+		return fmt.Errorf("connecting to NATS server: %w", err)
+	}
+
+	const webUpdateSubject = "web.update"
+
+	var wg sync.WaitGroup
+	wg.Add(1)
+
+	go func() {
+		defer wg.Done()
+
+		ch := make(chan *nats.Msg, 1)
+		defer close(ch)
+
+		sub, err := nc.ChanSubscribe(webUpdateSubject, ch)
+		if err != nil {
+			log.Printf("subscribing to %s: %s", webUpdateSubject, err)
+			return
+		}
+		defer sub.Unsubscribe()
+
+		log.Println("Waiting For message")
+
+		v := <-ch
+		log.Println(string(v.Data))
+	}()
+
+	log.Println("Publish message")
+
+	time.Sleep(time.Second)
+
+	if err := nc.Publish(webUpdateSubject, []byte("update")); err != nil {
+		return fmt.Errorf("publish: %w", err)
+	}
+
+	wg.Wait()
+
+	return nil
+}
+
+func key() error {
 	fileName := filepath.Join(filePath, "key.rsa")
 
 	if err := generatePrivateKey(fileName); err != nil {
