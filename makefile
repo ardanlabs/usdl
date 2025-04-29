@@ -20,7 +20,7 @@ run-tui:
 
 run-bui:
 	templ generate api/services/bui/
-	go run api/services/web/main.go
+	go run api/services/bui/main.go
 
 run-bui-reload:
 	find . -name "*.go" -o -name "*.html" -o -name "*.css" | entr -r go run api/services/bui/main.go & \
