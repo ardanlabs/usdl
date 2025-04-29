@@ -25,7 +25,6 @@ import (
 
 /*
 	Refactor Project Structure
-		- Move everything out to the root of the project
 		- Create a Datastar domain
 		- Move app and storage to app/sdk
 

@@ -5,9 +5,11 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/ardanlabs/usdl/api/services/bui/ui"
+	"github.com/ardanlabs/usdl/app/domain/datastarapp"
 	"github.com/ardanlabs/usdl/foundation/client"
 	"github.com/ardanlabs/usdl/foundation/client/storage/dbfile"
+	"github.com/ardanlabs/usdl/foundation/logger"
+	"github.com/ardanlabs/usdl/foundation/web"
 )
 
 const (
@@ -16,13 +18,25 @@ const (
 )
 
 func main() {
-	if err := run(); err != nil {
+	var log *logger.Logger
+
+	traceIDFn := func(ctx context.Context) string {
+		return web.GetTraceID(ctx).String()
+	}
+
+	log = logger.New(os.Stdout, logger.LevelInfo, "DATASTAR", traceIDFn)
+
+	// -------------------------------------------------------------------------
+
+	ctx := context.Background()
+
+	if err := run(ctx, log); err != nil {
 		fmt.Printf("Error: %s\n", err)
 		os.Exit(1)
 	}
 }
 
-func run() error {
+func run(_ context.Context, log *logger.Logger) error {
 	id, err := client.NewID(configFilePath)
 	if err != nil {
 		return fmt.Errorf("id: %w", err)
@@ -35,17 +49,17 @@ func run() error {
 
 	// -------------------------------------------------------------------------
 
-	ui, err := ui.New(context.Background(), id.MyAccountID)
+	ds, err := datastarapp.NewApp(log, id.MyAccountID)
 	if err != nil {
 		return fmt.Errorf("web: %w", err)
 	}
 
 	// -------------------------------------------------------------------------
 
-	app := client.NewApp(db, id, url, ui)
+	app := client.NewApp(db, id, url, ds)
 	defer app.Close()
 
-	ui.SetApp(app)
+	ds.SetApp(app)
 
 	// -------------------------------------------------------------------------
 

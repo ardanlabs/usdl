@@ -1,4 +1,4 @@
-// Package chatapp provides the application layer for the chat service.
+// Package chatapp provides the application layer for the chat domain.
 package chatapp
 
 import (

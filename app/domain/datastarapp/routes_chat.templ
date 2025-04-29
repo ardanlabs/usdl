@@ -1,5 +1,5 @@
 
-package ui
+package datastarapp
 
 import (
 	"github.com/ardanlabs/usdl/foundation/client"
@@ -9,7 +9,7 @@ import (
 	"strings"
 )
 
-templ PageChat(ui *WebUI, messages ...client.Message) {
+templ PageChat(a *App, messages ...client.Message) {
 	<!DOCTYPE html>
 	<html lang="en">
 		<head>
@@ -22,16 +22,16 @@ templ PageChat(ui *WebUI, messages ...client.Message) {
 			<script type="module" src="https://cdn.jsdelivr.net/gh/starfederation/datastar@1.0.0-beta.11/bundles/datastar.js"></script>
 		</head>
 		<body data-on-load="@get('/chat/updates')">
-			@ChatFragment(ui, messages...)
+			@ChatFragment(a, messages...)
 		</body>
 	</html>
 }
 
-templ ChatFragment(ui *WebUI, messages ...client.Message) {
+templ ChatFragment(a *App, messages ...client.Message) {
 	<div id="chat">
-		@usersFragment(ui)
+		@usersFragment(a)
 		<div class="rightPane">
-			<h2>My ID: { prettyPrintHex(ui.myAccountID) }</h2>
+			<h2>My ID: { prettyPrintHex(a.myAccountID) }</h2>
 			@chatMessageFragment(messages...)
 			<div class="inputs">
 				<input
@@ -48,10 +48,10 @@ templ ChatFragment(ui *WebUI, messages ...client.Message) {
 	</div>
 }
 
-templ usersFragment(ui *WebUI) {
+templ usersFragment(a *App) {
 	<div class="users">
 		<h2>Users</h2>
-		if len(ui.usernames) == 0 {
+		if len(a.usernames) == 0 {
 			<div class="user">
 				No users found
 			</div>
@@ -61,8 +61,8 @@ templ usersFragment(ui *WebUI) {
 						ID    common.Address
 						Label string
 					}
-					sortedUsers := make([]User, 0, len(ui.usernames))
-					for id, name := range ui.usernames {
+					sortedUsers := make([]User, 0, len(a.usernames))
+					for id, name := range a.usernames {
 						u := User{
 							ID:    id,
 							Label: prettyPrintUser(id, name),
@@ -75,11 +75,11 @@ templ usersFragment(ui *WebUI) {
 			}}
 			for _, u := range sortedUsers {
 				<div
-					class={ "user", templ.KV("active", u.ID == ui.visibleUser) }
+					class={ "user", templ.KV("active", u.ID == a.visibleUser) }
 					data-on-click={ datastar.PostSSE("/chat/changeUser/%s", u.ID.Hex()) }
 				>
 					{ u.Label }
-					if ui.HasUnseenMessage[u.ID] {
+					if a.hasUnseenMessage[u.ID] {
 						@icon("material-symbols:add-alert")
 					}
 				</div>

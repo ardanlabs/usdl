@@ -18,13 +18,13 @@ run-cap:
 run-tui:
 	go run api/clients/tui/main.go
 
-run-bui:
-	templ generate api/services/bui/
-	go run api/services/bui/main.go
+run-datastar:
+	templ generate app/domain/datastarapp/
+	go run api/services/datastar/main.go
 
-run-bui-reload:
-	find . -name "*.go" -o -name "*.html" -o -name "*.css" | entr -r go run api/services/bui/main.go & \
-	find . -name "*.templ" | entr -r templ generate api/services/bui/ & \
+run-datastar-reload:
+	find . -name "*.go" -o -name "*.html" -o -name "*.css" | entr -r go run api/services/datastar/main.go & \
+	find . -name "*.templ" | entr -r templ generate app/domain/datastarapp/ & \
 	wait;
 
 chat-test:
