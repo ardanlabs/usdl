@@ -31,6 +31,10 @@ github.com/delaneyj/gostar/elements
 # github.com/delaneyj/toolbelt v0.3.16
 ## explicit; go 1.23.3
 github.com/delaneyj/toolbelt/embeddednats
+# github.com/dlclark/regexp2 v1.11.4
+## explicit; go 1.13
+github.com/dlclark/regexp2
+github.com/dlclark/regexp2/syntax
 # github.com/ethereum/go-ethereum v1.15.5
 ## explicit; go 1.23.0
 github.com/ethereum/go-ethereum/common
@@ -161,6 +165,9 @@ github.com/nats-io/nkeys
 # github.com/nats-io/nuid v1.0.1
 ## explicit
 github.com/nats-io/nuid
+# github.com/pkoukk/tiktoken-go v0.1.6
+## explicit; go 1.19
+github.com/pkoukk/tiktoken-go
 # github.com/rivo/tview v0.0.0-20241227133733-17b7edb88c57
 ## explicit; go 1.18
 github.com/rivo/tview
@@ -176,6 +183,13 @@ github.com/samber/lo/mutable
 # github.com/starfederation/datastar v1.0.0-beta.11
 ## explicit; go 1.23.3
 github.com/starfederation/datastar/sdk/go
+# github.com/tmc/langchaingo v0.1.13
+## explicit; go 1.22.0
+github.com/tmc/langchaingo/callbacks
+github.com/tmc/langchaingo/llms
+github.com/tmc/langchaingo/llms/ollama
+github.com/tmc/langchaingo/llms/ollama/internal/ollamaclient
+github.com/tmc/langchaingo/schema
 # github.com/valyala/bytebufferpool v1.0.0
 ## explicit
 github.com/valyala/bytebufferpool

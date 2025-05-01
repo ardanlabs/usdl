@@ -25,7 +25,7 @@ import (
 
 /*
 	AI agent mode
-		- Ollama model server
+		- Final integration with Ollama
 
 	Remove NATS for a peer to peer networking semantic
 		- Use HTTP or SSE to establish communication

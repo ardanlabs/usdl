@@ -20,10 +20,13 @@ type TUI struct {
 	textArea *tview.TextArea
 	button   *tview.Button
 	app      *client.App
+	aiMode   bool
 }
 
-func New(myAccountID common.Address) *TUI {
-	var ui TUI
+func New(myAccountID common.Address, aiMode bool) *TUI {
+	ui := TUI{
+		aiMode: aiMode,
+	}
 
 	tApp := tview.NewApplication()
 
@@ -166,6 +169,8 @@ func (ui *TUI) WriteText(msg client.Message) {
 			fmt.Fprintln(ui.textView, "id not found: "+msg.ID.Hex())
 			return
 		}
+
+		// TODO: THIS IS WHERE WE HIT OLLAMA WITH THE INPUT AND HISTORY
 
 		if msg.ID.Hex() == currentID {
 			fmt.Fprintln(ui.textView, "-----")

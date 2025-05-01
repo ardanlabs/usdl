@@ -1,6 +1,7 @@
 package main
 
 import (
+	"flag"
 	"fmt"
 	"os"
 
@@ -8,6 +9,14 @@ import (
 	"github.com/ardanlabs/usdl/foundation/client"
 	"github.com/ardanlabs/usdl/foundation/client/storage/dbfile"
 )
+
+var aiMode bool
+
+func init() {
+	flag.BoolVar(&aiMode, "aimode", false, "turn on AI mode")
+
+	flag.Parse()
+}
 
 const (
 	url            = "ws://localhost:3000/connect"
@@ -34,7 +43,7 @@ func run() error {
 
 	// -------------------------------------------------------------------------
 
-	ui := ui.New(id.MyAccountID)
+	ui := ui.New(id.MyAccountID, aiMode)
 
 	// -------------------------------------------------------------------------
 
