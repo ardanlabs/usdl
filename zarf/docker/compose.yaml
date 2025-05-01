@@ -1,0 +1,14 @@
+services:
+  openwebui:
+    image: dyrnq/open-webui:main
+    container_name: openwebui
+    restart: always
+    environment:
+      - WEBUI_AUTH=false
+      - GLOBAL_LOG_LEVEL="DEBUG"
+    extra_hosts:
+      - host.docker.internal:host-gateway
+    ports:
+      - 3000:8080
+    volumes:
+      - ./openwebui:/app/backend/data

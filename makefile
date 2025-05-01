@@ -2,9 +2,45 @@
 SHELL_PATH = /bin/ash
 SHELL = $(if $(wildcard $(SHELL_PATH)),/bin/ash,/bin/bash)
 
+# ==============================================================================
+# Installation
+
 install:
 	go install github.com/a-h/templ/cmd/templ@latest
 	brew install entr
+	brew install ollama
+
+docker:
+	docker pull dyrnq/open-webui:main
+
+# ==============================================================================
+# Ollama
+
+ollama-up:
+	export OLLAMA_MODELS="zarf/ollama/models" && \
+	export OLLAMA_DEBUG=1 && \
+	ollama serve
+
+ollama-pull:
+	ollama pull llama3.3
+
+ollama-logs:
+	tail -f -n 100 ~/.ollama/logs/server.log
+
+# ==============================================================================
+# OpenWebUI
+
+compose-up:
+	docker compose -f zarf/docker/compose.yaml up
+
+compose-down:
+	docker compose -f zarf/docker/compose.yaml down
+
+compose-logs:
+	docker compose logs -n 100
+
+openwebui:
+	open -a "Google Chrome" http://localhost:3000/
 
 # ==============================================================================
 # Chat

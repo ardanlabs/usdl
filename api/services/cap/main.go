@@ -24,9 +24,6 @@ import (
 )
 
 /*
-	Refactor Project Structure
-		- Fix Embedding NATS / Do it ourselves
-
 	AI agent mode
 		- Ollama model server
 

@@ -2,7 +2,11 @@
 # https://github.com/github/gitignore/blob/main/community/Golang/Go.AllowList.gitignore
 #
 
-zarf/*
+zarf/cap/
+zarf/client/
+zarf/data/
+zarf/ollama/
+zarf/docker/openwebui
 
 # Binaries for programs and plugins
 *.exe
