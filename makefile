@@ -22,7 +22,7 @@ ollama-up:
 	ollama serve
 
 ollama-pull:
-	ollama pull llama3.3
+	ollama pull llama3.2
 
 ollama-logs:
 	tail -f -n 100 ~/.ollama/logs/server.log
