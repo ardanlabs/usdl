@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/tmc/langchaingo/llms"
 	"github.com/tmc/langchaingo/llms/ollama"
 )
 
@@ -39,7 +40,7 @@ func (a *Agent) Chat(ctx context.Context, input string, history []string) (strin
 
 	prompt := fmt.Sprintf(prompt, b.String(), input)
 
-	result, err := a.llm.Call(ctx, prompt)
+	result, err := a.llm.Call(ctx, prompt, llms.WithMaxTokens(500), llms.WithTemperature(1.0))
 	if err != nil {
 		return "", fmt.Errorf("call: %w", err)
 	}

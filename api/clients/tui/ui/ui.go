@@ -4,7 +4,6 @@ package ui
 import (
 	"context"
 	"fmt"
-	"time"
 
 	"github.com/ardanlabs/usdl/foundation/agents/ollamallm"
 	"github.com/ardanlabs/usdl/foundation/client"
@@ -228,7 +227,6 @@ func (ui *TUI) agentResponse(id common.Address) {
 	}
 
 	// TODO: Create some artificial delay to simulate thinking
-	time.Sleep(3 * time.Second)
 
 	ui.textArea.SetText(resp, true)
 	ui.buttonHandler()
