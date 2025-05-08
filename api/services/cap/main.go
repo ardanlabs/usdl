@@ -24,8 +24,14 @@ import (
 )
 
 /*
+	Long Message Encryption
+		- Getting error when messagse is too long
+
 	AI agent mode
-		- Final integration with Ollama
+		- Create some artificial delay to simulate thinking (Stopwatch)
+		- LLM to LLM conversations
+			- Response and then question
+		- Add UI to turn on and off
 
 	Remove NATS for a peer to peer networking semantic
 		- Use HTTP or SSE to establish communication
