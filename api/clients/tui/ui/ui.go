@@ -2,8 +2,11 @@
 package ui
 
 import (
+	"context"
 	"fmt"
+	"time"
 
+	"github.com/ardanlabs/usdl/foundation/agents/ollamallm"
 	"github.com/ardanlabs/usdl/foundation/client"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/gdamore/tcell/v2"
@@ -20,12 +23,14 @@ type TUI struct {
 	textArea *tview.TextArea
 	button   *tview.Button
 	app      *client.App
-	aiMode   bool
+	agent    *ollamallm.Agent
+	history  *history
 }
 
-func New(myAccountID common.Address, aiMode bool) *TUI {
+func New(myAccountID common.Address, agent *ollamallm.Agent) *TUI {
 	ui := TUI{
-		aiMode: aiMode,
+		agent:   agent,
+		history: NewHistory(5),
 	}
 
 	tApp := tview.NewApplication()
@@ -170,11 +175,18 @@ func (ui *TUI) WriteText(msg client.Message) {
 			return
 		}
 
-		// TODO: THIS IS WHERE WE HIT OLLAMA WITH THE INPUT AND HISTORY
+		msgContent := fmt.Sprintf("%s: %s", msg.Name, string(msg.Content))
+
+		ui.history.add(msg.ID, msgContent)
 
 		if msg.ID.Hex() == currentID {
 			fmt.Fprintln(ui.textView, "-----")
-			fmt.Fprintf(ui.textView, "%s: %s\n", msg.Name, string(msg.Content))
+			fmt.Fprintf(ui.textView, "%s\n", msgContent)
+
+			if ui.agent != nil {
+				ui.agentResponse(msg.ID)
+			}
+
 			return
 		}
 
@@ -183,6 +195,11 @@ func (ui *TUI) WriteText(msg client.Message) {
 			if msg.ID.Hex() == idStr {
 				ui.list.SetItemText(i, "* "+name, idStr)
 				ui.tviewApp.Draw()
+
+				if ui.agent != nil {
+					ui.agentResponse(msg.ID)
+				}
+
 				return
 			}
 		}
@@ -195,6 +212,27 @@ func (ui *TUI) UpdateContact(id common.Address, name string) {
 }
 
 // =============================================================================
+
+func (ui *TUI) agentResponse(id common.Address) {
+	ctx := context.TODO()
+
+	msgs := ui.history.retrieve(id)
+
+	input := msgs[len(msgs)-1]
+	history := msgs[:len(msgs)-1]
+
+	resp, err := ui.agent.Chat(ctx, input, history)
+	if err != nil {
+		fmt.Fprintln(ui.textView, "-----")
+		fmt.Fprintln(ui.textView, "failed ollama response: "+err.Error())
+	}
+
+	// TODO: Create some artificial delay to simulate thinking
+	time.Sleep(3 * time.Second)
+
+	ui.textArea.SetText(resp, true)
+	ui.buttonHandler()
+}
 
 func (ui *TUI) buttonHandler() {
 	_, to := ui.list.GetItemText(ui.list.GetCurrentItem())
@@ -214,6 +252,8 @@ func (ui *TUI) buttonHandler() {
 		ui.WriteText(msg)
 		return
 	}
+
+	ui.history.add(id, msg)
 
 	ui.textArea.SetText("", false)
 }

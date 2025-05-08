@@ -1,6 +1,6 @@
 // Package ollamallm provides a client to act as the user in the
 // client system.
-package ollamalm
+package ollamallm
 
 import (
 	"context"

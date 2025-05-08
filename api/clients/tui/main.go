@@ -6,6 +6,7 @@ import (
 	"os"
 
 	"github.com/ardanlabs/usdl/api/clients/tui/ui"
+	"github.com/ardanlabs/usdl/foundation/agents/ollamallm"
 	"github.com/ardanlabs/usdl/foundation/client"
 	"github.com/ardanlabs/usdl/foundation/client/storage/dbfile"
 )
@@ -43,7 +44,16 @@ func run() error {
 
 	// -------------------------------------------------------------------------
 
-	ui := ui.New(id.MyAccountID, aiMode)
+	var agent *ollamallm.Agent
+
+	if aiMode {
+		agent, err = ollamallm.New()
+		if err != nil {
+			return fmt.Errorf("ollama: %w", err)
+		}
+	}
+
+	ui := ui.New(id.MyAccountID, agent)
 
 	// -------------------------------------------------------------------------
 
