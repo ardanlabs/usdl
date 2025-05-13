@@ -171,7 +171,7 @@ func (db *DB) InsertMessage(id common.Address, msg client.Message) error {
 	db.contacts[id] = u
 
 	m := message{
-		ID:          msg.ID,
+		ID:          msg.From,
 		Name:        msg.Name,
 		Content:     msg.Content,
 		DateCreated: time.Now().UTC(),

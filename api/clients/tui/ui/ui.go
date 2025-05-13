@@ -155,14 +155,19 @@ func (ui *TUI) Run() error {
 func (ui *TUI) WriteText(msg client.Message) {
 	ui.textView.ScrollToEnd()
 
-	switch msg.ID {
+	switch msg.From {
 	case common.Address{}:
 		fmt.Fprintln(ui.textView, "-----")
 		fmt.Fprintf(ui.textView, "%s: %s\n", msg.Name, client.StitchMessages(msg.Content))
 
 	case ui.app.ID():
-		fmt.Fprintln(ui.textView, "-----")
-		fmt.Fprintf(ui.textView, "%s: %s\n", msg.Name, client.StitchMessages(msg.Content))
+		idx := ui.list.GetCurrentItem()
+		_, currentID := ui.list.GetItemText(idx)
+
+		if msg.To.Hex() == currentID {
+			fmt.Fprintln(ui.textView, "-----")
+			fmt.Fprintf(ui.textView, "%s: %s\n", msg.Name, client.StitchMessages(msg.Content))
+		}
 
 	default:
 		idx := ui.list.GetCurrentItem()
@@ -170,20 +175,20 @@ func (ui *TUI) WriteText(msg client.Message) {
 		_, currentID := ui.list.GetItemText(idx)
 		if currentID == "" {
 			fmt.Fprintln(ui.textView, "-----")
-			fmt.Fprintln(ui.textView, "id not found: "+msg.ID.Hex())
+			fmt.Fprintln(ui.textView, "id not found: "+msg.From.Hex())
 			return
 		}
 
 		msgContent := fmt.Sprintf("%s: %s", msg.Name, client.StitchMessages(msg.Content))
 
-		ui.history.add(msg.ID, msgContent)
+		ui.history.add(msg.From, msgContent)
 
-		if msg.ID.Hex() == currentID {
+		if msg.From.Hex() == currentID {
 			fmt.Fprintln(ui.textView, "-----")
 			fmt.Fprintf(ui.textView, "%s\n", msgContent)
 
 			if ui.agent != nil {
-				ui.agentResponse(msg.ID)
+				ui.agentResponse(msg.From)
 			}
 
 			return
@@ -191,12 +196,12 @@ func (ui *TUI) WriteText(msg client.Message) {
 
 		for i := range ui.list.GetItemCount() {
 			name, idStr := ui.list.GetItemText(i)
-			if msg.ID.Hex() == idStr {
+			if msg.From.Hex() == idStr {
 				ui.list.SetItemText(i, "* "+name, idStr)
 				ui.tviewApp.Draw()
 
 				if ui.agent != nil {
-					ui.agentResponse(msg.ID)
+					ui.agentResponse(msg.From)
 				}
 
 				return

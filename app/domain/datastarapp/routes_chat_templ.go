@@ -278,9 +278,9 @@ func chatMessageFragment(messages ...client.Message) templ.Component {
 					return templ_7745c5c3_Err
 				}
 				var templ_7745c5c3_Var11 string
-				templ_7745c5c3_Var11, templ_7745c5c3_Err = templ.JoinStringErrs(prettyPrintUser(msg.ID, msg.Name))
+				templ_7745c5c3_Var11, templ_7745c5c3_Err = templ.JoinStringErrs(prettyPrintUser(msg.From, msg.Name))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `app/domain/datastarapp/routes_chat.templ`, Line: 101, Col: 41}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `app/domain/datastarapp/routes_chat.templ`, Line: 101, Col: 43}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var11))
 				if templ_7745c5c3_Err != nil {

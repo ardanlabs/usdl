@@ -156,15 +156,15 @@ func (a *App) CurrentMessages() []client.Message {
 }
 
 func (a *App) WriteText(msg client.Message) {
-	if msg.ID != a.visibleUser {
-		a.hasUnseenMessage[msg.ID] = true
+	if msg.From != a.visibleUser {
+		a.hasUnseenMessage[msg.From] = true
 	}
 
 	// Not all messages are written to storage because it can be an error.
 	// We need to deal with that. The current a.messages are not really
 	// being used at this time.
 
-	a.messages[msg.ID] = append(a.messages[msg.ID], msg)
+	a.messages[msg.From] = append(a.messages[msg.From], msg)
 	a.nc.Publish(webUpdateSubject, []byte("update"))
 }
 

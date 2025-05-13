@@ -98,7 +98,7 @@ templ chatMessageFragment(messages ...client.Message) {
 			for _, msg := range messages {
 				<div class="message">
 					<div class="user">
-						{ prettyPrintUser(msg.ID, msg.Name) }
+						{ prettyPrintUser(msg.From, msg.Name) }
 					</div>
 					<div class="text">{ string(msg.Content[0]) }</div>
 				</div>

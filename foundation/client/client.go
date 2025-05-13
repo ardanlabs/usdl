@@ -24,7 +24,8 @@ type MyAccount struct {
 }
 
 type Message struct {
-	ID          common.Address
+	From        common.Address
+	To          common.Address
 	Name        string
 	Content     [][]byte
 	DateCreated time.Time
@@ -223,7 +224,8 @@ func (app *App) ReceiveCapMessage(conn *websocket.Conn) {
 
 		if inMsg.Msg[0][0] != '/' {
 			msg := Message{
-				ID:      inMsg.From.ID,
+				From:    inMsg.From.ID,
+				To:      app.id.MyAccountID,
 				Name:    inMsg.From.Name,
 				Content: msg,
 			}
@@ -253,19 +255,15 @@ func (app *App) SendMessageHandler(to common.Address, msg []byte) error {
 	}
 
 	// -------------------------------------------------------------------------
-	// Split message into chunks of 250 bytes so they can be encrypted.
+	// Split message into chunks of 240 bytes so they can be encrypted.
 
-	const maxBytes = 250
+	const maxBytes = 240
 	var msgs [][]byte
 	chunks := (len(msg) / maxBytes) + 1 // Calculate the number of chunks.
 	var start int
 
 	for range chunks {
-		end := start + maxBytes
-		if end > len(msg) { // Last chunk may be smaller.
-			end = len(msg)
-		}
-
+		end := min(start+maxBytes, len(msg))
 		msgs = append(msgs, msg[start:end])
 		start = start + maxBytes
 	}
@@ -328,7 +326,8 @@ func (app *App) SendMessageHandler(to common.Address, msg []byte) error {
 
 	if msg[0] != '/' {
 		msg := Message{
-			ID:      app.id.MyAccountID,
+			From:    app.id.MyAccountID,
+			To:      to,
 			Name:    "You",
 			Content: onScreen,
 		}
