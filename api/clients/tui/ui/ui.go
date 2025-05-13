@@ -69,7 +69,7 @@ func New(myAccountID common.Address, agent *ollamallm.Agent) *TUI {
 		}
 
 		for i, msg := range user.Messages {
-			fmt.Fprintf(textView, "%s: %s\n", msg.Name, string(msg.Content))
+			fmt.Fprintf(textView, "%s: %s\n", msg.Name, client.StitchMessages(msg.Content))
 			if i < len(user.Messages)-1 {
 				fmt.Fprintln(textView, "-----")
 			}
@@ -158,11 +158,11 @@ func (ui *TUI) WriteText(msg client.Message) {
 	switch msg.ID {
 	case common.Address{}:
 		fmt.Fprintln(ui.textView, "-----")
-		fmt.Fprintf(ui.textView, "%s: %s\n", msg.Name, string(msg.Content))
+		fmt.Fprintf(ui.textView, "%s: %s\n", msg.Name, client.StitchMessages(msg.Content))
 
 	case ui.app.ID():
 		fmt.Fprintln(ui.textView, "-----")
-		fmt.Fprintf(ui.textView, "%s: %s\n", msg.Name, string(msg.Content))
+		fmt.Fprintf(ui.textView, "%s: %s\n", msg.Name, client.StitchMessages(msg.Content))
 
 	default:
 		idx := ui.list.GetCurrentItem()
@@ -174,7 +174,7 @@ func (ui *TUI) WriteText(msg client.Message) {
 			return
 		}
 
-		msgContent := fmt.Sprintf("%s: %s", msg.Name, string(msg.Content))
+		msgContent := fmt.Sprintf("%s: %s", msg.Name, client.StitchMessages(msg.Content))
 
 		ui.history.add(msg.ID, msgContent)
 
@@ -245,7 +245,7 @@ func (ui *TUI) buttonHandler() {
 	if err := ui.app.SendMessageHandler(id, []byte(msg)); err != nil {
 		msg := client.Message{
 			Name:    "system",
-			Content: fmt.Appendf(nil, "Error sending message: %s", err),
+			Content: [][]byte{fmt.Appendf(nil, "Error sending message: %s", err)},
 		}
 		ui.WriteText(msg)
 		return

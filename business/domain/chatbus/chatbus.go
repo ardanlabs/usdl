@@ -169,7 +169,7 @@ func (c *Business) ListenClient(ctx context.Context, from User) {
 
 		dataThatWasSign := struct {
 			ToID      common.Address
-			Msg       []byte
+			Msg       [][]byte
 			FromNonce uint64
 		}{
 			ToID:      inMsg.ToID,
@@ -234,7 +234,7 @@ func (c *Business) listenBus() func(msg jetstream.Msg) {
 
 		dataThatWasSign := struct {
 			ToID      common.Address
-			Msg       []byte
+			Msg       [][]byte
 			FromNonce uint64
 		}{
 			ToID:      busMsg.ToID,
@@ -345,7 +345,7 @@ func (c *Business) readMessage(ctx context.Context, usr User) ([]byte, error) {
 	return resp.msg, nil
 }
 
-func (c *Business) sendMessageClient(from User, to User, fromNonce uint64, encrypted bool, msg []byte) error {
+func (c *Business) sendMessageClient(from User, to User, fromNonce uint64, encrypted bool, msg [][]byte) error {
 	m := outgoingMessage{
 		From: outgoingUser{
 			ID:    from.ID,

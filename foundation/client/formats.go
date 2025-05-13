@@ -1,14 +1,22 @@
 package client
 
-import "fmt"
+import (
+	"bytes"
+	"fmt"
+)
 
-// func formatMessage(name string, msg []byte) []byte {
-// 	return fmt.Appendf(nil, "%s: %s", name, string(msg))
-// }
+func StitchMessages(msgs [][]byte) string {
+	var b bytes.Buffer
+	for _, msg := range msgs {
+		b.Write(msg)
+	}
+
+	return b.String()
+}
 
 func errorMessage(format string, a ...any) Message {
 	return Message{
 		Name:    "system",
-		Content: fmt.Appendf(nil, format, a...),
+		Content: [][]byte{fmt.Appendf(nil, format, a...)},
 	}
 }

@@ -27,7 +27,7 @@ type message struct {
 	ID          common.Address `json:"id"`
 	Name        string         `json:"name"`
 	Encrypted   bool           `json:"encrypted"`
-	Content     []byte         `json:"content"`
+	Content     [][]byte       `json:"content"`
 	DateCreated time.Time      `json:"date_created"`
 }
 

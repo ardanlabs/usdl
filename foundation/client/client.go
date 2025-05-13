@@ -26,7 +26,7 @@ type MyAccount struct {
 type Message struct {
 	ID          common.Address
 	Name        string
-	Content     []byte
+	Content     [][]byte
 	DateCreated time.Time
 }
 
@@ -60,7 +60,7 @@ type UI interface {
 type outgoingMessage struct {
 	ToID      common.Address `json:"toID"`
 	Encrypted bool           `json:"encrypted"`
-	Msg       []byte         `json:"msg"`
+	Msg       [][]byte       `json:"msg"`
 	FromNonce uint64         `json:"fromNonce"`
 	V         *big.Int       `json:"v"`
 	R         *big.Int       `json:"r"`
@@ -74,9 +74,9 @@ type usr struct {
 }
 
 type incomingMessage struct {
-	From      usr    `json:"from"`
-	Encrypted bool   `json:"encrypted"`
-	Msg       []byte `json:"msg"`
+	From      usr      `json:"from"`
+	Encrypted bool     `json:"encrypted"`
+	Msg       [][]byte `json:"msg"`
 }
 
 // =============================================================================
@@ -221,7 +221,7 @@ func (app *App) ReceiveCapMessage(conn *websocket.Conn) {
 
 		// ---------------------------------------------------------------------
 
-		if inMsg.Msg[0] != '/' {
+		if inMsg.Msg[0][0] != '/' {
 			msg := Message{
 				ID:      inMsg.From.ID,
 				Name:    inMsg.From.Name,
@@ -253,19 +253,35 @@ func (app *App) SendMessageHandler(to common.Address, msg []byte) error {
 	}
 
 	// -------------------------------------------------------------------------
+	// Split message into chunks of 250 bytes so they can be encrypted.
 
-	nonce := usr.AppLastNonce + 1
+	const maxBytes = 250
+	var msgs [][]byte
+	chunks := (len(msg) / maxBytes) + 1 // Calculate the number of chunks.
+	var start int
 
-	onWire, onScreen, err := app.preprocessSendMessage(usr, msg)
+	for range chunks {
+		end := start + maxBytes
+		if end > len(msg) { // Last chunk may be smaller.
+			end = len(msg)
+		}
+
+		msgs = append(msgs, msg[start:end])
+		start = start + maxBytes
+	}
+
+	onWire, onScreen, err := app.preprocessSendMessage(usr, msgs)
 	if err != nil {
 		return fmt.Errorf("preprocess message: %w", err)
 	}
 
 	// -------------------------------------------------------------------------
 
+	nonce := usr.AppLastNonce + 1
+
 	dataToSign := struct {
 		ToID      common.Address
-		Msg       []byte
+		Msg       [][]byte
 		FromNonce uint64
 	}{
 		ToID:      to,
@@ -337,20 +353,26 @@ func (app *App) QueryContactByID(id common.Address) (User, error) {
 
 // =============================================================================
 
-func (app *App) preprocessRecvMessage(inMsg incomingMessage) ([]byte, error) {
-	msg := inMsg.Msg
+func (app *App) preprocessRecvMessage(inMsg incomingMessage) ([][]byte, error) {
+	msgs := inMsg.Msg
 
 	// -------------------------------------------------------------------------
 	// Process Normal Message
 
-	if msg[0] != '/' {
+	if msgs[0][0] != '/' {
 		if !inMsg.Encrypted {
-			return msg, nil
+			return msgs, nil
 		}
 
-		decryptedData, err := rsa.DecryptPKCS1v15(rand.Reader, app.id.PrivKeyRSA, []byte(msg))
-		if err != nil {
-			return nil, fmt.Errorf("decrypting message: %w", err)
+		decryptedData := make([][]byte, len(msgs))
+
+		for i, msg := range msgs {
+			dd, err := rsa.DecryptPKCS1v15(rand.Reader, app.id.PrivKeyRSA, []byte(msg))
+			if err != nil {
+				return nil, fmt.Errorf("decrypting message: %w", err)
+			}
+
+			decryptedData[i] = dd
 		}
 
 		return decryptedData, nil
@@ -359,7 +381,7 @@ func (app *App) preprocessRecvMessage(inMsg incomingMessage) ([]byte, error) {
 	// -------------------------------------------------------------------------
 	// Process Commands
 
-	msgStr := string(msg)
+	msgStr := string(msgs[0])
 
 	parts := strings.Split(msgStr[1:], " ")
 	if len(parts) < 2 {
@@ -371,20 +393,20 @@ func (app *App) preprocessRecvMessage(inMsg incomingMessage) ([]byte, error) {
 		if err := app.db.UpdateContactKey(inMsg.From.ID, msgStr[5:]); err != nil {
 			return nil, fmt.Errorf("updating key: %w", err)
 		}
-		return []byte("** updated contact's key **"), nil
+		return [][]byte{[]byte("** updated contact's key **")}, nil
 	}
 
 	return nil, fmt.Errorf("unknown command")
 }
 
-func (app *App) preprocessSendMessage(usr User, msg []byte) (onWire []byte, onScreen []byte, err error) {
+func (app *App) preprocessSendMessage(usr User, msgs [][]byte) (onWire [][]byte, onScreen [][]byte, err error) {
 
 	// -------------------------------------------------------------------------
 	// Process Normal Message
 
-	if msg[0] != '/' {
+	if msgs[0][0] != '/' {
 		if usr.Key == "" {
-			return msg, msg, nil
+			return msgs, msgs, nil
 		}
 
 		publicKey, err := getPublicKey(usr.Key)
@@ -392,18 +414,24 @@ func (app *App) preprocessSendMessage(usr User, msg []byte) (onWire []byte, onSc
 			return nil, nil, fmt.Errorf("unable to read public key: %w", err)
 		}
 
-		encryptedData, err := rsa.EncryptPKCS1v15(rand.Reader, publicKey, msg)
-		if err != nil {
-			return nil, nil, fmt.Errorf("encrypting message: %w", err)
+		encryptedData := make([][]byte, len(msgs))
+
+		for i, msg := range msgs {
+			ed, err := rsa.EncryptPKCS1v15(rand.Reader, publicKey, msg)
+			if err != nil {
+				return nil, nil, fmt.Errorf("encrypting message: %w", err)
+			}
+
+			encryptedData[i] = ed
 		}
 
-		return encryptedData, msg, nil
+		return encryptedData, msgs, nil
 	}
 
 	// -------------------------------------------------------------------------
 	// Process Commands
 
-	msgStr := string(msg)
+	msgStr := string(msgs[0])
 	msgStr = strings.TrimSpace(msgStr)
 	msgStr = strings.ToLower(msgStr)
 
@@ -422,7 +450,7 @@ func (app *App) preprocessSendMessage(usr User, msg []byte) (onWire []byte, onSc
 
 			errMsg := fmt.Appendf(nil, "/key %s", app.id.PubKeyRSA)
 
-			return errMsg, errMsg, nil
+			return [][]byte{errMsg}, [][]byte{errMsg}, nil
 		}
 	}
 

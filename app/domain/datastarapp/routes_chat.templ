@@ -100,7 +100,7 @@ templ chatMessageFragment(messages ...client.Message) {
 					<div class="user">
 						{ prettyPrintUser(msg.ID, msg.Name) }
 					</div>
-					<div class="text">{ string(msg.Content) }</div>
+					<div class="text">{ string(msg.Content[0]) }</div>
 				</div>
 			}
 			<div data-scroll-into-view></div>

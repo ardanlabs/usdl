@@ -33,18 +33,18 @@ import (
 			- Response and then question
 		- Add UI to turn on and off
 
-	Remove NATS for a peer to peer networking semantic
-		- Use HTTP or SSE to establish communication
-		- Maintain local DB of existing CAP services
-		- We record what the CAP ID is for a user
-		- We record what the CAP ID is for a group
-			- We know that can change over time
+	CAP to CAP communication
+		- Socket level communication
 
-	Group Chat
-		- Allow users to create groups
+	Mesh Service
+		- Google Cloud Run
+		- Socket level communication to CAP
 
 	Datafile transfer
 		- Private stream
+
+	Group Chat
+		- Allow users to create groups
 
 	Refactor client
 		- Clear history button
