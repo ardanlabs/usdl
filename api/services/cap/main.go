@@ -24,14 +24,11 @@ import (
 )
 
 /*
-	Long Message Encryption
-		- Getting error when messagse is too long
-
 	AI agent mode
+		- Add UI to turn on and off
 		- Create some artificial delay to simulate thinking (Stopwatch)
 		- LLM to LLM conversations
 			- Response and then question
-		- Add UI to turn on and off
 
 	CAP to CAP communication
 		- Socket level communication
