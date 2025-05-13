@@ -125,12 +125,16 @@ func New(myAccountID common.Address, agent *ollamallm.Agent) *TUI {
 	ui.textArea = textArea
 	ui.button = button
 
-	button.SetSelectedFunc(ui.buttonHandler)
+	buttonHandler := func() {
+		ui.buttonHandler(common.Address{})
+	}
+
+	button.SetSelectedFunc(buttonHandler)
 
 	textArea.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
 		switch event.Key() {
 		case tcell.KeyEnter:
-			ui.buttonHandler()
+			buttonHandler()
 			return nil
 		}
 		return event
@@ -217,10 +221,10 @@ func (ui *TUI) UpdateContact(id common.Address, name string) {
 
 // =============================================================================
 
-func (ui *TUI) agentResponse(id common.Address) {
+func (ui *TUI) agentResponse(from common.Address) {
 	ctx := context.TODO()
 
-	msgs := ui.history.retrieve(id)
+	msgs := ui.history.retrieve(from)
 
 	input := msgs[len(msgs)-1]
 	history := msgs[:len(msgs)-1]
@@ -234,20 +238,21 @@ func (ui *TUI) agentResponse(id common.Address) {
 	// TODO: Create some artificial delay to simulate thinking
 
 	ui.textArea.SetText(resp, true)
-	ui.buttonHandler()
+	ui.buttonHandler(from)
 }
 
-func (ui *TUI) buttonHandler() {
-	_, to := ui.list.GetItemText(ui.list.GetCurrentItem())
+func (ui *TUI) buttonHandler(to common.Address) {
+	if to == (common.Address{}) {
+		_, id := ui.list.GetItemText(ui.list.GetCurrentItem())
+		to = common.HexToAddress(id)
+	}
 
 	msg := ui.textArea.GetText()
 	if msg == "" {
 		return
 	}
 
-	id := common.HexToAddress(to)
-
-	if err := ui.app.SendMessageHandler(id, []byte(msg)); err != nil {
+	if err := ui.app.SendMessageHandler(to, []byte(msg)); err != nil {
 		msg := client.Message{
 			Name:    "system",
 			Content: [][]byte{fmt.Appendf(nil, "Error sending message: %s", err)},
@@ -256,7 +261,7 @@ func (ui *TUI) buttonHandler() {
 		return
 	}
 
-	ui.history.add(id, msg)
+	ui.history.add(to, msg)
 
 	ui.textArea.SetText("", false)
 }
