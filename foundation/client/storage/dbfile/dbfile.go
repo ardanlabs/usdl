@@ -36,8 +36,9 @@ func NewDB(filePath string, myAccountID common.Address) (*DB, error) {
 
 	db := DB{
 		myAccount: client.MyAccount{
-			ID:   df.MyAccount.ID,
-			Name: df.MyAccount.Name,
+			ID:          df.MyAccount.ID,
+			Name:        df.MyAccount.Name,
+			ProfilePath: df.MyAccount.ProfilePath,
 		},
 		contacts: contacts,
 	}

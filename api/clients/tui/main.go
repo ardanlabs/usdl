@@ -36,7 +36,7 @@ func run() error {
 
 	// -------------------------------------------------------------------------
 
-	agent, err := ollamallm.New()
+	agent, err := ollamallm.New(db.MyAccount().ProfilePath)
 	if err != nil {
 		return fmt.Errorf("ollama agent: %w", err)
 	}

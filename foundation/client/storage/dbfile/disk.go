@@ -32,8 +32,9 @@ type message struct {
 }
 
 type myAccount struct {
-	ID   common.Address `json:"id"`
-	Name string         `json:"name"`
+	ID          common.Address `json:"id"`
+	Name        string         `json:"name"`
+	ProfilePath string         `json:"profile_path"`
 }
 
 type dataFileUser struct {
@@ -87,8 +88,9 @@ func createDBOnDisk(myAccountID common.Address) (dataFile, error) {
 
 	df := dataFile{
 		MyAccount: myAccount{
-			ID:   myAccountID,
-			Name: "Anonymous",
+			ID:          myAccountID,
+			Name:        "Anonymous",
+			ProfilePath: "zarf/client/profile/bill.txt",
 		},
 		Contacts: []dataFileUser{
 			{

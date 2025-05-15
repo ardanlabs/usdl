@@ -6,27 +6,39 @@ import (
 	"context"
 	_ "embed"
 	"fmt"
+	"io"
+	"os"
 	"strings"
 
 	"github.com/tmc/langchaingo/llms"
 	"github.com/tmc/langchaingo/llms/ollama"
 )
 
-//go:embed prompts/prompt.txt
-var prompt string
-
 type Agent struct {
-	llm *ollama.LLM
+	llm    *ollama.LLM
+	prompt string
 }
 
-func New() (*Agent, error) {
+func New(profilePath string) (*Agent, error) {
+	f, err := os.Open(profilePath)
+	if err != nil {
+		return nil, fmt.Errorf("profile: %w", err)
+	}
+	defer f.Close()
+
+	prompt, err := io.ReadAll(f)
+	if err != nil {
+		return nil, fmt.Errorf("reading profile: %w", err)
+	}
+
 	llm, err := ollama.New(ollama.WithModel("llama3.2:latest"))
 	if err != nil {
 		return nil, fmt.Errorf("ollama: %w", err)
 	}
 
 	a := Agent{
-		llm: llm,
+		llm:    llm,
+		prompt: string(prompt),
 	}
 
 	return &a, nil
@@ -38,7 +50,7 @@ func (a *Agent) Chat(ctx context.Context, input string, history []string) (strin
 		b.WriteString(fmt.Sprintf("%s\n\n", h))
 	}
 
-	prompt := fmt.Sprintf(prompt, b.String(), input)
+	prompt := fmt.Sprintf(a.prompt, b.String(), input)
 
 	result, err := a.llm.Call(ctx, prompt, llms.WithMaxTokens(500), llms.WithTemperature(1.0))
 	if err != nil {

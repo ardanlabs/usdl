@@ -3,7 +3,8 @@
 #
 
 zarf/cap/
-zarf/client/
+zarf/client/db/
+zarf/client/id/
 zarf/data/
 zarf/ollama/
 zarf/docker/openwebui

@@ -19,8 +19,9 @@ import (
 )
 
 type MyAccount struct {
-	ID   common.Address
-	Name string
+	ID          common.Address
+	Name        string
+	ProfilePath string
 }
 
 type Message struct {
