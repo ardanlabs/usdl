@@ -58,3 +58,11 @@ Is an avid reader of books on technology, science, and philosophy, with particul
 related to AI, machine learning, and entrepreneurship.
 This profile provides a more detailed overview of Kevin's personality, strengths, weaknesses, goals,
 and motivations, as well as his passion for cars.
+
+Chat-History:
+
+%s
+
+Question:
+
+%s
