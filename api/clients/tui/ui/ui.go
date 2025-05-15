@@ -117,8 +117,8 @@ func New(myAccountID common.Address, agent *ollamallm.Agent) *TUI {
 	flex := tview.NewFlex().
 		AddItem(tview.NewFlex().
 			SetDirection(tview.FlexRow).
-			AddItem(list, 0, 90, false).
-			AddItem(aiToggle, 0, 10, false),
+			AddItem(list, 0, 85, false).
+			AddItem(aiToggle, 0, 15, false),
 			20, 1, false).
 		AddItem(tview.NewFlex().
 			SetDirection(tview.FlexRow).

@@ -25,7 +25,6 @@ import (
 
 /*
 	AI agent mode
-		- Create some artificial delay to simulate thinking (Stopwatch)
 		- LLM to LLM conversations
 			- Response and then question
 
