@@ -45,6 +45,10 @@ import (
 
 	Refactor client
 		- Clear history button
+
+	Write Tests
+		- Unit tests
+		- Integration tests
 */
 
 var build = "develop"

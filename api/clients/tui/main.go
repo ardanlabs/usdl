@@ -1,7 +1,7 @@
 package main
 
 import (
-	"flag"
+	"context"
 	"fmt"
 	"os"
 
@@ -10,14 +10,6 @@ import (
 	"github.com/ardanlabs/usdl/foundation/client"
 	"github.com/ardanlabs/usdl/foundation/client/storage/dbfile"
 )
-
-var aiMode bool
-
-func init() {
-	flag.BoolVar(&aiMode, "aimode", false, "turn on AI mode")
-
-	flag.Parse()
-}
 
 const (
 	url            = "ws://localhost:3000/connect"
@@ -44,18 +36,20 @@ func run() error {
 
 	// -------------------------------------------------------------------------
 
-	var agent *ollamallm.Agent
-
-	if aiMode {
-		agent, err = ollamallm.New()
-		if err != nil {
-			return fmt.Errorf("ollama: %w", err)
-		}
+	agent, err := ollamallm.New()
+	if err != nil {
+		return fmt.Errorf("ollama agent: %w", err)
 	}
 
-	ui := ui.New(id.MyAccountID, agent)
+	// If we can't connect to the ollama agent, we can use it.
+	fmt.Println("warming up the agent...")
+	if _, err := agent.Chat(context.Background(), "warm up", nil); err != nil {
+		agent = nil
+	}
 
 	// -------------------------------------------------------------------------
+
+	ui := ui.New(id.MyAccountID, agent)
 
 	app := client.NewApp(db, id, url, ui)
 	defer app.Close()

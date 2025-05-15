@@ -20,10 +20,12 @@ type TUI struct {
 	list     *tview.List
 	textView *tview.TextView
 	textArea *tview.TextArea
+	aiToggle *tview.Button
 	button   *tview.Button
 	app      *client.App
 	agent    *ollamallm.Agent
 	history  *history
+	aiMode   bool
 }
 
 func New(myAccountID common.Address, agent *ollamallm.Agent) *TUI {
@@ -96,8 +98,24 @@ func New(myAccountID common.Address, agent *ollamallm.Agent) *TUI {
 
 	// -------------------------------------------------------------------------
 
+	aiToggle := tview.NewButton("Agent Off")
+	aiToggle.SetStyle(tcell.StyleDefault.Background(tcell.ColorBlack).Foreground(tcell.ColorRed).Bold(true))
+	aiToggle.SetActivatedStyle(tcell.StyleDefault.Background(tcell.ColorBlack).Foreground(tcell.ColorRed).Bold(true))
+	aiToggle.SetBorder(true)
+	aiToggle.SetBorderColor(tcell.ColorRed)
+
+	if agent == nil {
+		aiToggle.SetLabel("Agent Disabled")
+	}
+
+	// -------------------------------------------------------------------------
+
 	flex := tview.NewFlex().
-		AddItem(list, 20, 1, false).
+		AddItem(tview.NewFlex().
+			SetDirection(tview.FlexRow).
+			AddItem(list, 0, 90, false).
+			AddItem(aiToggle, 0, 10, false),
+			20, 1, false).
 		AddItem(tview.NewFlex().
 			SetDirection(tview.FlexRow).
 			AddItem(textView, 0, 5, false).
@@ -123,7 +141,16 @@ func New(myAccountID common.Address, agent *ollamallm.Agent) *TUI {
 	ui.list = list
 	ui.textView = textView
 	ui.textArea = textArea
+	ui.aiToggle = aiToggle
 	ui.button = button
+
+	// -------------------------------------------------------------------------
+
+	aiToggleHandler := func() {
+		ui.aiToggleHandler(agent != nil)
+	}
+
+	aiToggle.SetSelectedFunc(aiToggleHandler)
 
 	buttonHandler := func() {
 		ui.buttonHandler(common.Address{})
@@ -191,7 +218,7 @@ func (ui *TUI) WriteText(msg client.Message) {
 			fmt.Fprintln(ui.textView, "-----")
 			fmt.Fprintf(ui.textView, "%s\n", msgContent)
 
-			if ui.agent != nil {
+			if ui.aiMode {
 				ui.agentResponse(msg.From)
 			}
 
@@ -204,7 +231,7 @@ func (ui *TUI) WriteText(msg client.Message) {
 				ui.list.SetItemText(i, "* "+name, idStr)
 				ui.tviewApp.Draw()
 
-				if ui.agent != nil {
+				if ui.aiMode {
 					ui.agentResponse(msg.From)
 				}
 
@@ -264,4 +291,26 @@ func (ui *TUI) buttonHandler(to common.Address) {
 	ui.history.add(to, msg)
 
 	ui.textArea.SetText("", false)
+}
+
+func (ui *TUI) aiToggleHandler(agent bool) {
+	if !agent {
+		return
+	}
+
+	switch ui.aiToggle.GetLabel() {
+	case "Agent Off":
+		ui.aiToggle.SetLabel("Agent On")
+		ui.aiToggle.SetStyle(tcell.StyleDefault.Background(tcell.ColorBlack).Foreground(tcell.ColorGreen).Bold(true))
+		ui.aiToggle.SetActivatedStyle(tcell.StyleDefault.Background(tcell.ColorBlack).Foreground(tcell.ColorGreen).Bold(true))
+		ui.aiToggle.SetBorderColor(tcell.ColorGreen)
+		ui.aiMode = true
+
+	case "Agent On":
+		ui.aiToggle.SetLabel("Agent Off")
+		ui.aiToggle.SetStyle(tcell.StyleDefault.Background(tcell.ColorBlack).Foreground(tcell.ColorRed).Bold(true))
+		ui.aiToggle.SetActivatedStyle(tcell.StyleDefault.Background(tcell.ColorBlack).Foreground(tcell.ColorRed).Bold(true))
+		ui.aiToggle.SetBorderColor(tcell.ColorRed)
+		ui.aiMode = false
+	}
 }
