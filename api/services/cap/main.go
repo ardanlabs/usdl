@@ -24,10 +24,6 @@ import (
 )
 
 /*
-	AI agent mode
-		- LLM to LLM conversations
-			- Response and then question
-
 	CAP to CAP communication
 		- Socket level communication
 
