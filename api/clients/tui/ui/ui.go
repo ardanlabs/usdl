@@ -292,6 +292,11 @@ func (ui *TUI) buttonHandler(to common.Address) {
 		return
 	}
 
+	// Found a issue where the AI started a response with a /.
+	if ui.aiMode && msg[0] == '/' {
+		msg = msg[1:]
+	}
+
 	if err := ui.app.SendMessageHandler(to, []byte(msg)); err != nil {
 		msg := client.Message{
 			Name:    "system",
