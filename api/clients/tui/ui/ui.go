@@ -4,6 +4,9 @@ package ui
 import (
 	"context"
 	"fmt"
+	"math"
+	"math/rand/v2"
+	"time"
 
 	"github.com/ardanlabs/usdl/foundation/agents/ollamallm"
 	"github.com/ardanlabs/usdl/foundation/client"
@@ -77,6 +80,7 @@ func New(myAccountID common.Address, agent *ollamallm.Agent) *TUI {
 			}
 		}
 
+		textView.ScrollToEnd()
 		list.SetItemText(idx, user.Name, user.ID.Hex())
 	})
 
@@ -256,13 +260,22 @@ func (ui *TUI) agentResponse(from common.Address) {
 	input := msgs[len(msgs)-1]
 	history := msgs[:len(msgs)-1]
 
+	start := time.Now()
+
 	resp, err := ui.agent.Chat(ctx, input, history)
 	if err != nil {
 		fmt.Fprintln(ui.textView, "-----")
 		fmt.Fprintln(ui.textView, "failed ollama response: "+err.Error())
 	}
 
-	// TODO: Create some artificial delay to simulate thinking
+	// Create some artificial delay to simulate thinking
+	// We don't care about negative calculations because
+	// that means we've already waited long enough.
+
+	dur := int(math.Ceil(time.Since(start).Seconds()))
+	delayInSeconds := max(rand.IntN(11), 3)
+	delayInSeconds -= dur
+	time.Sleep(time.Duration(delayInSeconds) * time.Second)
 
 	ui.textArea.SetText(resp, true)
 	ui.buttonHandler(from)
