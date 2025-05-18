@@ -1,4 +1,4 @@
-// Package sql provides a SQLite database for the chat application.
+// Package sql provides a SQLite database for the client application.
 package sql
 
 import (
