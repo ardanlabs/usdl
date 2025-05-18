@@ -23,16 +23,12 @@ func TestMyAccount(t *testing.T) {
 	account := db.MyAccount()
 	assert.Equal(t, common.HexToAddress("0xF"), account.ID)
 	assert.NotEmpty(t, account.Name)
+	assert.NotEmpty(t, account.ProfilePath)
 
 	// If the database is already created, but NewDB is called with a different address,
-	// it will update the account ID to the new address. This is because the source
-	// of truth for the account is the zarf/client/id folder.
-	db, err = sql.NewDB(".", common.HexToAddress("0xFFFFFFFF"))
-	assert.NoError(t, err)
-
-	account = db.MyAccount()
-	assert.Equal(t, common.HexToAddress("0xFFFFFFFF"), account.ID)
-	assert.NotEmpty(t, account.Name)
+	// it should return an error.
+	_, err = sql.NewDB(".", common.HexToAddress("0xFFFFFFFF"))
+	assert.Error(t, err)
 }
 
 func TestInsertContact(t *testing.T) {

@@ -82,18 +82,18 @@ func NewDB(filePath string, myAccountID common.Address) (*DB, error) {
 }
 
 func (db *DB) MyAccount() client.MyAccount {
-	myAccount := myAccount{
+	myAcc := myAccount{
 		Singleton: true,
 	}
-	res := db.db.First(&myAccount)
+	res := db.db.First(&myAcc)
 	if res.Error != nil {
 		return client.MyAccount{} // maybe better to return an error
 	}
 
 	return client.MyAccount{
-		ID:          common.HexToAddress(myAccount.ID),
-		Name:        myAccount.Name,
-		ProfilePath: myAccount.ProfilePath,
+		ID:          common.HexToAddress(myAcc.ID),
+		Name:        myAcc.Name,
+		ProfilePath: myAcc.ProfilePath,
 	}
 }
 
@@ -158,7 +158,7 @@ func (db *DB) Contacts() []client.User {
 	return contacts
 }
 
-func (db *DB) InsertMessage(id common.Address, msg client.Message) error {
+func (db *DB) InsertMessage(userID common.Address, msg client.Message) error {
 	content := datatypes.NewJSONType(messageContent{
 		Content: msg.Content,
 	})
@@ -166,7 +166,7 @@ func (db *DB) InsertMessage(id common.Address, msg client.Message) error {
 	res := db.db.Create(&message{
 		Name:    msg.Name,
 		Content: content,
-		UserID:  strings.ToLower(id.Hex()),
+		UserID:  strings.ToLower(userID.Hex()),
 	})
 	if res.Error != nil {
 		return fmt.Errorf("insert message: %w", res.Error)
@@ -215,7 +215,10 @@ func (db *DB) CleanTables() error {
 }
 
 func saveMyAccount(db *gorm.DB, myAccountID common.Address) error {
-	var myAcc myAccount
+	myAcc := myAccount{
+		Singleton: true,
+	}
+
 	res := db.First(&myAcc)
 	if res.Error != nil && res.Error != gorm.ErrRecordNotFound {
 		return fmt.Errorf("query my account: %w", res.Error)
@@ -230,7 +233,9 @@ func saveMyAccount(db *gorm.DB, myAccountID common.Address) error {
 		}).Error
 	}
 
-	myAcc.Singleton = true
-	myAcc.ID = strings.ToLower(myAccountID.Hex())
-	return db.Save(&myAcc).Error
+	if !strings.EqualFold(myAcc.ID, myAccountID.Hex()) {
+		return fmt.Errorf("my account ID mismatch: got: %s exp: %s", strings.ToLower(myAcc.ID), strings.ToLower(myAccountID.Hex()))
+	}
+
+	return nil
 }
