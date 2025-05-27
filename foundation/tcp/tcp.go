@@ -1,7 +1,6 @@
 package tcp
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -12,65 +11,26 @@ import (
 	"time"
 )
 
-// Set of error variables for start up.
-var (
-	ErrInvalidConfiguration = errors.New("invalid configuration")
-	ErrInvalidNetType       = errors.New("invalid net type configuration")
-	ErrInvalidConnHandler   = errors.New("invalid connection handler configuration")
-	ErrInvalidReqHandler    = errors.New("invalid request handler configuration")
-	ErrInvalidRespHandler   = errors.New("invalid response handler configuration")
-)
-
-// Set of event types.
-const (
-	EvtAccept = iota + 1
-	EvtJoin
-	EvtRead
-	EvtRemove
-	EvtDrop
-	EvtGroom
-)
-
-// Set of event sub types.
-const (
-	TypError = iota + 1
-	TypInfo
-	TypTrigger
-)
-
-// CltError provides support for multi client operations that might error.
-type CltError []error
-
-// Error implments the error interface for CltError.
-func (ce CltError) Error() string {
-	var b bytes.Buffer
-	for _, err := range ce {
-		b.WriteString(err.Error())
-		b.WriteString("\n")
-	}
-	return b.String()
-}
-
 // TCP contains a set of networked client connections.
 type TCP struct {
-	Config
-	Name string
-
-	ipAddress string
-	port      int
-	tcpAddr   *net.TCPAddr
-
-	listener   *net.TCPListener
-	listenerMu sync.Mutex
-
-	clients   map[string]*client
-	clientsMu sync.Mutex
-
-	wg sync.WaitGroup
-
-	dropConns    int32
-	shuttingDown int32
-
+	name                   string
+	log                    func(evt int, typ int, ipAddress string, format string, a ...any)
+	netType                string
+	addr                   string
+	connHandler            ConnHandler
+	reqHandler             ReqHandler
+	respHandler            RespHandler
+	connRateLimit          ConnRateLimit
+	ipAddress              string
+	port                   int
+	tcpAddr                *net.TCPAddr
+	listener               *net.TCPListener
+	listenerMu             sync.RWMutex
+	clients                map[string]*client
+	clientsMu              sync.Mutex
+	wgAccept               sync.WaitGroup
+	dropConns              int32
+	shuttingDown           int32
 	lastAcceptedConnection time.Time
 }
 
@@ -78,7 +38,7 @@ type TCP struct {
 func New(name string, cfg Config) (*TCP, error) {
 
 	// Validate the configuration.
-	if err := cfg.Validate(); err != nil {
+	if err := cfg.validate(); err != nil {
 		return nil, err
 	}
 
@@ -88,102 +48,106 @@ func New(name string, cfg Config) (*TCP, error) {
 		return nil, err
 	}
 
+	l := func(evt int, typ int, ipAddress string, format string, a ...any) {
+		cfg.Logger(eventTypes[evt], eventSubTypes[typ], ipAddress, fmt.Sprintf(format, a...))
+	}
+
 	// Create a TCP for this ipaddress and port.
 	t := TCP{
-		Config: cfg,
-		Name:   name,
-
-		ipAddress: tcpAddr.IP.String(),
-		port:      tcpAddr.Port,
-		tcpAddr:   tcpAddr,
-
-		clients: make(map[string]*client),
+		name:          name,
+		log:           l,
+		netType:       cfg.NetType,
+		addr:          cfg.Addr,
+		connHandler:   cfg.ConnHandler,
+		reqHandler:    cfg.ReqHandler,
+		respHandler:   cfg.RespHandler,
+		connRateLimit: cfg.ConnRateLimit,
+		ipAddress:     tcpAddr.IP.String(),
+		port:          tcpAddr.Port,
+		tcpAddr:       tcpAddr,
+		clients:       make(map[string]*client),
 	}
 
 	return &t, nil
 }
 
-// join takes an IP and port values and creates a cleaner string.
-func join(ip string, port int) string {
-	return net.JoinHostPort(ip, strconv.Itoa(port))
+// Name returns the name of the TCP manager.
+func (t *TCP) Name() string {
+	return t.name
+}
+
+func (t *TCP) tcpListener() *net.TCPListener {
+	t.listenerMu.RLock()
+	defer t.listenerMu.RUnlock()
+
+	return t.listener
+}
+
+func (t *TCP) resetTCPListener() {
+	t.listenerMu.Lock()
+	defer t.listenerMu.Unlock()
+
+	t.listener.Close()
+	t.listener = nil
+}
+
+func (t *TCP) startTCPListener() (*net.TCPListener, error) {
+	t.listenerMu.Lock()
+	defer t.listenerMu.Unlock()
+
+	listener, err := net.ListenTCP(t.netType, t.tcpAddr)
+	if err != nil {
+		return nil, err
+	}
+
+	t.listener = listener
+
+	return listener, nil
 }
 
 // Start creates the accept routine and begins to accept connections.
 func (t *TCP) Start() error {
-	t.listenerMu.Lock()
-	{
-		// If the listener has been started already, return an error.
-		if t.listener != nil {
-			t.listenerMu.Unlock()
-			return errors.New("this TCP has already been started")
-		}
+	if t.tcpListener() != nil {
+		return errors.New("this TCP has already been started")
 	}
-	t.listenerMu.Unlock()
 
-	// We need to wait for the goroutine we are about to
-	// create to initialize itself.
-	var waitStart sync.WaitGroup
-	waitStart.Add(1)
+	t.wgAccept.Add(1)
 
-	// Start the connection accept routine.
-	t.wg.Add(1)
 	go func() {
-		var listener *net.TCPListener
+		defer func() {
+			t.log(EvtAccept, TypError, net.JoinHostPort(t.ipAddress, strconv.Itoa(t.port)), "shutdown")
+			t.wgAccept.Done()
+		}()
 
 		for {
-			t.listenerMu.Lock()
-			{
-				// Start a listener for the specified addr and port is one
-				// does not exist.
-				if t.listener == nil {
-					var err error
-					listener, err = net.ListenTCP(t.NetType, t.tcpAddr)
-					if err != nil {
-						panic(err)
-					}
-
-					t.listener = listener
-					waitStart.Done()
-
-					t.Event(EvtAccept, TypInfo, join(t.ipAddress, t.port), "waiting")
-				}
+			listener, err := t.startTCPListener()
+			if err != nil {
+				t.log(EvtAccept, TypError, "", err.Error())
+				panic(err)
 			}
-			t.listenerMu.Unlock()
 
-			// Listen for new connections.
+			t.log(EvtAccept, TypInfo, net.JoinHostPort(t.ipAddress, strconv.Itoa(t.port)), "waiting")
+
 			conn, err := listener.Accept()
 			if err != nil {
-				shutdown := atomic.LoadInt32(&t.shuttingDown)
+				fmt.Println("Accept error:", err)
+				t.log(EvtAccept, TypError, conn.RemoteAddr().String(), err.Error())
 
-				if shutdown == 0 {
-					t.Event(EvtAccept, TypError, conn.RemoteAddr().String(), err.Error())
-				} else {
-					t.listenerMu.Lock()
-					{
-						t.listener = nil
-					}
-					t.listenerMu.Unlock()
+				time.Sleep(time.Second)
+
+				if atomic.LoadInt32(&t.shuttingDown) != 0 {
+					t.resetTCPListener()
 					break
 				}
 
-				// temporary is declared to test for the existence of
-				// the method coming from the net package.
+				t.log(EvtAccept, TypError, conn.RemoteAddr().String(), err.Error())
+
 				type temporary interface {
 					Temporary() bool
 				}
 
 				if e, ok := err.(temporary); ok && !e.Temporary() {
-					t.listenerMu.Lock()
-					{
-						t.listener.Close()
-						t.listener = nil
-					}
-					t.listenerMu.Unlock()
-
-					// Don't want to add a flag. So setting this back to
-					// 1 so when the listener is re-established, the call
-					// to Done does not fail.
-					waitStart.Add(1)
+					t.resetTCPListener()
 				}
 
 				continue
@@ -191,19 +155,19 @@ func (t *TCP) Start() error {
 
 			// Check if we are being asked to drop all new connections.
 			if drop := atomic.LoadInt32(&t.dropConns); drop == 1 {
-				t.Event(EvtAccept, TypInfo, "", "dropping new connection")
+				t.log(EvtAccept, TypInfo, "", "dropping new connection")
 				conn.Close()
 				continue
 			}
 
 			// Check if rate limit is enabled.
-			if t.RateLimit != nil {
+			if t.connRateLimit != nil {
 				now := time.Now().UTC()
 
 				// We will only accept 1 connection per duration. Anything
 				// connection above that must be dropped.
-				if t.lastAcceptedConnection.Add(t.RateLimit()).After(now) {
-					t.Event(EvtAccept, TypError, conn.RemoteAddr().String(), "rate limit drop : Local[ %v ] Limit[ %v ]", conn.LocalAddr(), t.RateLimit())
+				if t.lastAcceptedConnection.Add(t.connRateLimit()).After(now) {
+					t.log(EvtAccept, TypError, conn.RemoteAddr().String(), "rate limit drop : Local[ %v ] Limit[ %v ]", conn.LocalAddr(), t.connRateLimit())
 					conn.Close()
 					continue
 				}
@@ -215,14 +179,7 @@ func (t *TCP) Start() error {
 			// Add this new connection to the manager map.
 			t.join(conn)
 		}
-
-		// Shutting down the routine.
-		t.wg.Done()
-		t.Event(EvtAccept, TypError, join(t.ipAddress, t.port), "shutdown")
 	}()
-
-	// Wait for the goroutine to initialize itself.
-	waitStart.Wait()
 
 	return nil
 }
@@ -270,7 +227,7 @@ func (t *TCP) Stop() error {
 	}
 
 	// Wait for the accept routine to terminate.
-	t.wg.Wait()
+	t.wgAccept.Wait()
 
 	return nil
 }
@@ -317,7 +274,7 @@ func (t *TCP) Send(ctx context.Context, r *Response) error {
 	t.clientsMu.Unlock()
 
 	// Send the response.
-	return t.RespHandler.Write(r, c.writer)
+	return t.respHandler.Write(r, c.writer)
 }
 
 // SendAll will deliver the response back to all connected clients.
@@ -333,9 +290,9 @@ func (t *TCP) SendAll(ctx context.Context, r *Response) error {
 	t.clientsMu.Unlock()
 
 	// TODO: Consider doing this in parallel.
-	var errors CltError
+	var errors Errors
 	for _, c := range clts {
-		if err := t.RespHandler.Write(r, c.writer); err != nil {
+		if err := t.respHandler.Write(r, c.writer); err != nil {
 			errors = append(errors, err)
 		}
 	}
@@ -448,7 +405,7 @@ func (t *TCP) Groom(d time.Duration) {
 			// This is a blocking call that waits for the socket goroutine
 			// to report its done. This parallel call should work well since
 			// there is no error handling needed.
-			t.Event(EvtGroom, TypInfo, c.ipAddress, "Last[ %v ] Dur[ %v ]", c.lastAct.Format(time.RFC3339), sub)
+			t.log(EvtGroom, TypInfo, c.ipAddress, "Last[ %v ] Dur[ %v ]", c.lastAct.Format(time.RFC3339), sub)
 			go c.drop()
 		}
 	}
@@ -457,13 +414,13 @@ func (t *TCP) Groom(d time.Duration) {
 // join takes a new connection and adds it to the manager.
 func (t *TCP) join(conn net.Conn) {
 	ipAddress := conn.RemoteAddr().String()
-	t.Event(EvtJoin, TypTrigger, ipAddress, "new connection")
+	t.log(EvtJoin, TypTrigger, ipAddress, "new connection")
 
 	t.clientsMu.Lock()
 	{
 		// Validate this has not been joined already.
 		if _, ok := t.clients[ipAddress]; ok {
-			t.Event(EvtJoin, TypError, ipAddress, "already connected")
+			t.log(EvtJoin, TypError, ipAddress, "already connected")
 			conn.Close()
 
 			t.clientsMu.Unlock()
@@ -484,7 +441,7 @@ func (t *TCP) remove(conn net.Conn) {
 	{
 		// Validate this has not been removed already.
 		if _, ok := t.clients[ipAddress]; !ok {
-			t.Event(EvtRemove, TypError, ipAddress, "already removed")
+			t.log(EvtRemove, TypError, ipAddress, "already removed")
 			t.clientsMu.Unlock()
 			return
 		}

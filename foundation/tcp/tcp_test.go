@@ -191,15 +191,12 @@ func TestRateLimit(t *testing.T) {
 	{
 		// Create a configuration.
 		cfg := tcp.Config{
-			NetType:     "tcp4",
-			Addr:        ":0",
-			ConnHandler: tcpConnHandler{},
-			ReqHandler:  tcpReqHandler{},
-			RespHandler: tcpRespHandler{},
-
-			OptRateLimit: tcp.OptRateLimit{
-				RateLimit: func() time.Duration { return ratelimit },
-			},
+			NetType:       "tcp4",
+			Addr:          ":0",
+			ConnHandler:   tcpConnHandler{},
+			ReqHandler:    tcpReqHandler{},
+			RespHandler:   tcpRespHandler{},
+			ConnRateLimit: func() time.Duration { return ratelimit },
 		}
 
 		// Create a new TCP value.

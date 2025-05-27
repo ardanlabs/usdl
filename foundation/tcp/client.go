@@ -33,7 +33,7 @@ func newClient(t *TCP, conn net.Conn) *client {
 
 	// Ask the user to bind the reader and writer they want to
 	// use for this connection.
-	r, w := t.ConnHandler.Bind(conn)
+	r, w := t.connHandler.Bind(conn)
 
 	c := client{
 		t:         t,
@@ -64,18 +64,18 @@ func (c *client) drop() {
 	c.conn.Close()
 	c.wg.Wait()
 
-	c.t.Event(EvtDrop, TypInfo, c.ipAddress, "connect dropped")
+	c.t.log(EvtDrop, TypInfo, c.ipAddress, "connect dropped")
 }
 
 // read waits for a message and sends it to the user for procesing.
 func (c *client) read() {
-	c.t.Event(EvtRead, TypTrigger, c.ipAddress, "ready")
+	c.t.log(EvtRead, TypTrigger, c.ipAddress, "ready")
 
 close:
 	for {
 
 		// Wait for a message to arrive.
-		data, length, err := c.t.ReqHandler.Read(c.ipAddress, c.reader)
+		data, length, err := c.t.reqHandler.Read(c.ipAddress, c.reader)
 		c.lastAct = time.Now().UTC()
 		c.nReads++
 
@@ -122,11 +122,11 @@ close:
 
 		// Process the request on this goroutine that is
 		// handling the socket connection.
-		c.t.ReqHandler.Process(&r)
+		c.t.reqHandler.Process(&r)
 	}
 
 	// Remove from the list of connections and report we are done.
 	c.t.remove(c.conn)
 	c.wg.Done()
-	c.t.Event(EvtDrop, TypTrigger, c.ipAddress, "dropped connection")
+	c.t.log(EvtDrop, TypTrigger, c.ipAddress, "dropped connection")
 }

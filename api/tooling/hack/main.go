@@ -34,21 +34,17 @@ func run() error {
 	// -------------------------------------------------------------------------
 	// SERVER SIDE
 
-	f := func(evt, typ int, ipAddress string, format string, a ...any) {
-		log.Printf("EVENT: %d, %d, %s, %s", evt, typ, ipAddress, fmt.Sprintf(format, a...))
+	f := func(evt string, typ string, ipAddress string, format string, a ...any) {
+		log.Printf("EVENT: %s, %s, %s, %s", evt, typ, ipAddress, fmt.Sprintf(format, a...))
 	}
 
 	cfg := tcp.Config{
-		NetType: "tcp4",
-		Addr:    ":0",
-
+		NetType:     "tcp4",
+		Addr:        ":0",
 		ConnHandler: tcpConnHandler{},
 		ReqHandler:  tcpReqHandler{},
 		RespHandler: tcpRespHandler{},
-
-		OptEvent: tcp.OptEvent{
-			Event: f,
-		},
+		Logger:      f,
 	}
 
 	// Create a new TCP value.
@@ -60,16 +56,29 @@ func run() error {
 	if err := u.Start(); err != nil {
 		return fmt.Errorf("starting the TCP listener: %w", err)
 	}
-	defer u.Stop()
+	defer func() {
+		fmt.Println("CALLING STOP")
+		u.Stop()
+	}()
 
 	// -------------------------------------------------------------------------
 	// CLIENT SIDE
 
-	conn, err := net.Dial("tcp4", u.Addr().String())
-	if err != nil {
-		return fmt.Errorf("dialing a new TCP connection: %w", err)
+	var conn net.Conn
+	for i := range 10 {
+		fmt.Println("Try Client Conenction:", i+1)
+		conn, err = net.Dial("tcp4", u.Addr().String())
+		if err != nil {
+			if i < 10 {
+				fmt.Println("Waiting for server to start...")
+				time.Sleep(100 * time.Millisecond)
+				continue
+			}
+
+			return fmt.Errorf("dialing a new TCP connection: %w", err)
+		}
+		defer conn.Close()
 	}
-	defer conn.Close()
 
 	bufReader := bufio.NewReader(conn)
 	bufWriter := bufio.NewWriter(conn)
