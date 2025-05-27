@@ -26,10 +26,7 @@ import (
 /*
 	CAP to CAP communication
 		- Socket level communication
-
-	Mesh Service
-		- Google Cloud Run
-		- Socket level communication to CAP
+		- Tailscale
 
 	Datafile transfer
 		- Private stream

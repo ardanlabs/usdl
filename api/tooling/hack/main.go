@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"context"
 	"crypto/rand"
 	"crypto/rsa"
@@ -10,11 +11,13 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"net"
 	"os"
 	"path/filepath"
 	"sync"
 	"time"
 
+	"github.com/ardanlabs/usdl/foundation/tcp"
 	"github.com/delaneyj/toolbelt/embeddednats"
 	"github.com/nats-io/nats.go"
 )
@@ -28,6 +31,119 @@ func main() {
 }
 
 func run() error {
+	// -------------------------------------------------------------------------
+	// SERVER SIDE
+
+	cfg := tcp.Config{
+		NetType: "tcp4",
+		Addr:    ":0",
+
+		ConnHandler: tcpConnHandler{},
+		ReqHandler:  tcpReqHandler{},
+		RespHandler: tcpRespHandler{},
+	}
+
+	// Create a new TCP value.
+	u, err := tcp.New("TEST", cfg)
+	if err != nil {
+		return fmt.Errorf("creating new TCP listener: %w", err)
+	}
+
+	if err := u.Start(); err != nil {
+		return fmt.Errorf("starting the TCP listener: %w", err)
+	}
+	defer u.Stop()
+
+	// -------------------------------------------------------------------------
+	// CLIENT SIDE
+
+	conn, err := net.Dial("tcp4", u.Addr().String())
+	if err != nil {
+		return fmt.Errorf("dialing a new TCP connection: %w", err)
+	}
+	defer conn.Close()
+
+	bufReader := bufio.NewReader(conn)
+	bufWriter := bufio.NewWriter(conn)
+
+	fmt.Print("CLIENT: SEND:", "Hello\n")
+
+	if _, err := bufWriter.WriteString("Hello\n"); err != nil {
+		return fmt.Errorf("sending data to the connection: %w", err)
+	}
+	bufWriter.Flush()
+
+	response, err := bufReader.ReadString('\n')
+	if err != nil {
+		return fmt.Errorf("reading response from the connection: %w", err)
+	}
+
+	fmt.Println("CLIENT: RECV:", response)
+
+	return nil
+}
+
+// =============================================================================
+
+// tcpConnHandler is required to process data.
+type tcpConnHandler struct{}
+
+// Bind is called to init to reader and writer.
+func (tch tcpConnHandler) Bind(conn net.Conn) (io.Reader, io.Writer) {
+	return bufio.NewReader(conn), bufio.NewWriter(conn)
+}
+
+// tcpReqHandler is required to process client messages.
+type tcpReqHandler struct{}
+
+// Read implements the udp.ReqHandler interface. It is provided a request
+// value to popular and a io.Reader that was created in the Bind above.
+func (tcpReqHandler) Read(ipAddress string, reader io.Reader) ([]byte, int, error) {
+	bufReader := reader.(*bufio.Reader)
+
+	fmt.Println("SERVER: WAITING ON READ")
+
+	// Read a small string to keep the code simple.
+	line, err := bufReader.ReadString('\n')
+	if err != nil {
+		return nil, 0, err
+	}
+
+	fmt.Println("SERVER: MESSAGE READ")
+
+	return []byte(line), len(line), nil
+}
+
+// Process is used to handle the processing of the message.
+func (tcpReqHandler) Process(r *tcp.Request) {
+	fmt.Println("SERVER: CLIENT MESSAGE:", string(r.Data))
+
+	resp := tcp.Response{
+		TCPAddr: r.TCPAddr,
+		Data:    []byte("GOT IT\n"),
+		Length:  7,
+	}
+
+	fmt.Println("SERVER: SEND:", string(resp.Data))
+
+	r.TCP.Send(r.Context, &resp)
+}
+
+type tcpRespHandler struct{}
+
+// Write is provided the user-defined writer and the data to write.
+func (tcpRespHandler) Write(r *tcp.Response, writer io.Writer) error {
+	bufWriter := writer.(*bufio.Writer)
+	if _, err := bufWriter.WriteString(string(r.Data)); err != nil {
+		return err
+	}
+
+	return bufWriter.Flush()
+}
+
+// =============================================================================
+
+func natsexp() error {
 	ctx := context.Background()
 
 	ns, err := embeddednats.New(ctx, embeddednats.WithDirectory("zarf/data/nats"))
