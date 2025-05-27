@@ -40,7 +40,7 @@ func run() error {
 
 	cfg := tcp.Config{
 		NetType:     "tcp4",
-		Addr:        ":0",
+		Addr:        "0.0.0.0:3001",
 		ConnHandler: tcpConnHandler{},
 		ReqHandler:  tcpReqHandler{},
 		RespHandler: tcpRespHandler{},
@@ -64,44 +64,48 @@ func run() error {
 	// -------------------------------------------------------------------------
 	// CLIENT SIDE
 
-	var conn net.Conn
-	for i := range 10 {
-		fmt.Println("Waiting for server to start...")
-		time.Sleep(300 * time.Millisecond)
+	for range 2 {
+		fmt.Println("**************************************")
 
-		fmt.Println("Try Client Conenction:", i+1)
-		addr := u.Addr()
-		if addr == nil {
-			continue
-		}
-		conn, err = net.Dial("tcp4", addr.String())
-		if err != nil {
-			if i < 10 {
-				continue
+		var conn net.Conn
+		for i := range 10 {
+			fmt.Println("Waiting for server to start...")
+			time.Sleep(300 * time.Millisecond)
+
+			fmt.Println("Try Client Conenction:", i+1)
+			if i == 9 {
+				return errors.New("unable to connect to server after 10 attempts")
 			}
 
-			return fmt.Errorf("dialing a new TCP connection: %w", err)
+			conn, err = net.Dial(cfg.NetType, cfg.Addr)
+			if err != nil {
+				if i < 10 {
+					continue
+				}
+
+				return fmt.Errorf("dialing a new TCP connection: %w", err)
+			}
+			defer conn.Close()
+			break
 		}
-		defer conn.Close()
-		break
+
+		bufReader := bufio.NewReader(conn)
+		bufWriter := bufio.NewWriter(conn)
+
+		fmt.Print("CLIENT: SEND:", "Hello\n")
+
+		if _, err := bufWriter.WriteString("Hello\n"); err != nil {
+			return fmt.Errorf("sending data to the connection: %w", err)
+		}
+		bufWriter.Flush()
+
+		response, err := bufReader.ReadString('\n')
+		if err != nil {
+			return fmt.Errorf("reading response from the connection: %w", err)
+		}
+
+		fmt.Println("CLIENT: RECV:", response)
 	}
-
-	bufReader := bufio.NewReader(conn)
-	bufWriter := bufio.NewWriter(conn)
-
-	fmt.Print("CLIENT: SEND:", "Hello\n")
-
-	if _, err := bufWriter.WriteString("Hello\n"); err != nil {
-		return fmt.Errorf("sending data to the connection: %w", err)
-	}
-	bufWriter.Flush()
-
-	response, err := bufReader.ReadString('\n')
-	if err != nil {
-		return fmt.Errorf("reading response from the connection: %w", err)
-	}
-
-	fmt.Println("CLIENT: RECV:", response)
 
 	return nil
 }

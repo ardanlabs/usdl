@@ -95,6 +95,8 @@ func (t *TCP) startTCPListener() (*net.TCPListener, error) {
 	t.listenerMu.Lock()
 	defer t.listenerMu.Unlock()
 
+	fmt.Println("START TCP LISTENER", t.tcpAddr)
+
 	listener, err := net.ListenTCP(t.netType, t.tcpAddr)
 	if err != nil {
 		return nil, err
@@ -119,6 +121,7 @@ func (t *TCP) Start() error {
 			t.wgAccept.Done()
 		}()
 
+	endmainloop:
 		for {
 			listener, err := t.startTCPListener()
 			if err != nil {
@@ -128,51 +131,55 @@ func (t *TCP) Start() error {
 
 			t.log(EvtAccept, TypInfo, net.JoinHostPort(t.ipAddress, strconv.Itoa(t.port)), "waiting")
 
-			conn, err := listener.Accept()
-			if err != nil {
-				if atomic.LoadInt32(&t.shuttingDown) != 0 {
-					t.resetTCPListener()
-					break
+		endacceptloop:
+			for {
+				conn, err := listener.Accept()
+				if err != nil {
+					if atomic.LoadInt32(&t.shuttingDown) != 0 {
+						t.resetTCPListener()
+						break endmainloop
+					}
+
+					t.log(EvtAccept, TypError, conn.RemoteAddr().String(), err.Error())
+
+					type temporary interface {
+						Temporary() bool
+					}
+
+					if e, ok := err.(temporary); ok && !e.Temporary() {
+						t.resetTCPListener()
+						break endacceptloop
+					}
+
+					continue
 				}
 
-				t.log(EvtAccept, TypError, conn.RemoteAddr().String(), err.Error())
-
-				type temporary interface {
-					Temporary() bool
-				}
-
-				if e, ok := err.(temporary); ok && !e.Temporary() {
-					t.resetTCPListener()
-				}
-
-				continue
-			}
-
-			// Check if we are being asked to drop all new connections.
-			if drop := atomic.LoadInt32(&t.dropConns); drop == 1 {
-				t.log(EvtAccept, TypInfo, "", "dropping new connection")
-				conn.Close()
-				continue
-			}
-
-			// Check if rate limit is enabled.
-			if t.connRateLimit != nil {
-				now := time.Now().UTC()
-
-				// We will only accept 1 connection per duration. Anything
-				// connection above that must be dropped.
-				if t.lastAcceptedConnection.Add(t.connRateLimit()).After(now) {
-					t.log(EvtAccept, TypError, conn.RemoteAddr().String(), "rate limit drop : Local[ %v ] Limit[ %v ]", conn.LocalAddr(), t.connRateLimit())
+				// Check if we are being asked to drop all new connections.
+				if drop := atomic.LoadInt32(&t.dropConns); drop == 1 {
+					t.log(EvtAccept, TypInfo, "", "dropping new connection")
 					conn.Close()
 					continue
 				}
 
-				// Since we accepted connection, mark the time.
-				t.lastAcceptedConnection = now
-			}
+				// Check if rate limit is enabled.
+				if t.connRateLimit != nil {
+					now := time.Now().UTC()
 
-			// Add this new connection to the manager map.
-			t.join(conn)
+					// We will only accept 1 connection per duration. Anything
+					// connection above that must be dropped.
+					if t.lastAcceptedConnection.Add(t.connRateLimit()).After(now) {
+						t.log(EvtAccept, TypError, conn.RemoteAddr().String(), "rate limit drop : Local[ %v ] Limit[ %v ]", conn.LocalAddr(), t.connRateLimit())
+						conn.Close()
+						continue
+					}
+
+					// Since we accepted connection, mark the time.
+					t.lastAcceptedConnection = now
+				}
+
+				// Add this new connection to the manager map.
+				t.join(conn)
+			}
 		}
 	}()
 
@@ -312,13 +319,7 @@ func (t *TCP) DropConnections(drop bool) {
 // Addr returns the listener's network address. This may be different than the values
 // provided in the configuration, for example if configuration port value is 0.
 func (t *TCP) Addr() net.Addr {
-
-	// We are aware this read is not safe with the
-	// goroutine accepting connections.
-	if t.listener == nil {
-		return nil
-	}
-	return t.listener.Addr()
+	return t.tcpAddr
 }
 
 // Connections returns the number of client connections.
