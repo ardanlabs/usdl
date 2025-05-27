@@ -131,7 +131,6 @@ func (t *TCP) Start() error {
 
 			t.log(EvtAccept, TypInfo, net.JoinHostPort(t.ipAddress, strconv.Itoa(t.port)), "waiting")
 
-		endacceptloop:
 			for {
 				conn, err := listener.Accept()
 				if err != nil {
@@ -148,7 +147,7 @@ func (t *TCP) Start() error {
 
 					if e, ok := err.(temporary); ok && !e.Temporary() {
 						t.resetTCPListener()
-						break endacceptloop
+						break endmainloop
 					}
 
 					continue
