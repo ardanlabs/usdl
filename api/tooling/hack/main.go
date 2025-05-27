@@ -64,16 +64,19 @@ func run() error {
 	// -------------------------------------------------------------------------
 	// CLIENT SIDE
 
-	time.Sleep(time.Second)
-
 	var conn net.Conn
 	for i := range 10 {
+		fmt.Println("Waiting for server to start...")
+		time.Sleep(300 * time.Millisecond)
+
 		fmt.Println("Try Client Conenction:", i+1)
-		conn, err = net.Dial("tcp4", u.Addr().String())
+		addr := u.Addr()
+		if addr == nil {
+			continue
+		}
+		conn, err = net.Dial("tcp4", addr.String())
 		if err != nil {
 			if i < 10 {
-				fmt.Println("Waiting for server to start...")
-				time.Sleep(100 * time.Millisecond)
 				continue
 			}
 
