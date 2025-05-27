@@ -130,11 +130,6 @@ func (t *TCP) Start() error {
 
 			conn, err := listener.Accept()
 			if err != nil {
-				fmt.Println("Accept error:", err)
-				t.log(EvtAccept, TypError, conn.RemoteAddr().String(), err.Error())
-
-				time.Sleep(time.Second)
-
 				if atomic.LoadInt32(&t.shuttingDown) != 0 {
 					t.resetTCPListener()
 					break

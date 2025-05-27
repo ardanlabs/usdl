@@ -64,6 +64,8 @@ func run() error {
 	// -------------------------------------------------------------------------
 	// CLIENT SIDE
 
+	time.Sleep(time.Second)
+
 	var conn net.Conn
 	for i := range 10 {
 		fmt.Println("Try Client Conenction:", i+1)
@@ -78,6 +80,7 @@ func run() error {
 			return fmt.Errorf("dialing a new TCP connection: %w", err)
 		}
 		defer conn.Close()
+		break
 	}
 
 	bufReader := bufio.NewReader(conn)
