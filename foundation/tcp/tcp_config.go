@@ -10,7 +10,7 @@ type OptRateLimit struct {
 
 // OptEvent defines an handler used to provide events.
 type OptEvent struct {
-	Event func(evt, typ int, ipAddress string, format string, a ...interface{})
+	Event func(evt, typ int, ipAddress string, format string, a ...any)
 }
 
 // Config provides a data structure of required configuration parameters.

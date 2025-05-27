@@ -34,6 +34,10 @@ func run() error {
 	// -------------------------------------------------------------------------
 	// SERVER SIDE
 
+	f := func(evt, typ int, ipAddress string, format string, a ...any) {
+		log.Printf("EVENT: %d, %d, %s, %s", evt, typ, ipAddress, fmt.Sprintf(format, a...))
+	}
+
 	cfg := tcp.Config{
 		NetType: "tcp4",
 		Addr:    ":0",
@@ -41,6 +45,10 @@ func run() error {
 		ConnHandler: tcpConnHandler{},
 		ReqHandler:  tcpReqHandler{},
 		RespHandler: tcpRespHandler{},
+
+		OptEvent: tcp.OptEvent{
+			Event: f,
+		},
 	}
 
 	// Create a new TCP value.
