@@ -17,7 +17,6 @@ const (
 const (
 	TypError = iota + 1
 	TypInfo
-	TypTrigger
 )
 
 var eventTypes = map[int]string{
@@ -31,9 +30,8 @@ var eventTypes = map[int]string{
 }
 
 var eventSubTypes = map[int]string{
-	TypError:   "error",
-	TypInfo:    "info",
-	TypTrigger: "trigger",
+	TypError: "error",
+	TypInfo:  "info",
 }
 
 // =============================================================================

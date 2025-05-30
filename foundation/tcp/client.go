@@ -12,31 +12,30 @@ import (
 
 // client represents a single networked connection.
 type client struct {
-	t         *TCP
+	tcp       *TCP
 	conn      net.Conn
 	ipAddress string
 	isIPv6    bool
 	reader    io.Reader
 	writer    io.Writer
 	wg        sync.WaitGroup
-
-	timeConn time.Time
-	lastAct  time.Time
-	nReads   int
-	nWrites  int
+	timeConn  time.Time
+	lastAct   time.Time
+	nReads    int
+	nWrites   int
 }
 
 // newClient creates a new client for an incoming connection.
-func newClient(t *TCP, conn net.Conn) *client {
+func newClient(tcp *TCP, conn net.Conn) *client {
 	now := time.Now().UTC()
 	ipAddress := conn.RemoteAddr().String()
 
 	// Ask the user to bind the reader and writer they want to
 	// use for this connection.
-	r, w := t.connHandler.Bind(conn)
+	r, w := tcp.connHandler.Bind(conn)
 
 	c := client{
-		t:         t,
+		tcp:       tcp,
 		conn:      conn,
 		ipAddress: ipAddress,
 		reader:    r,
@@ -50,37 +49,38 @@ func newClient(t *TCP, conn net.Conn) *client {
 		c.isIPv6 = true
 	}
 
-	// Launch a goroutine for this connection.
-	c.wg.Add(1)
-	go c.read()
-
 	return &c
 }
 
-// drop closes the client connection and read operation.
-func (c *client) drop() {
+func (c *client) start() {
+	c.wg.Add(1)
+	go c.read()
+}
 
-	// Close the connection.
+func (c *client) close() {
 	c.conn.Close()
 	c.wg.Wait()
 
-	c.t.log(EvtDrop, TypInfo, c.ipAddress, "connect dropped")
+	c.tcp.log(EvtDrop, TypInfo, c.ipAddress, "connection closed")
 }
 
-// read waits for a message and sends it to the user for procesing.
 func (c *client) read() {
-	c.t.log(EvtRead, TypTrigger, c.ipAddress, "ready")
+	c.tcp.log(EvtRead, TypInfo, c.ipAddress, "client G started")
+
+	defer func() {
+		c.tcp.log(EvtDrop, TypInfo, c.ipAddress, "client G stopped")
+		c.tcp.clients.close(c.conn)
+		c.wg.Done()
+	}()
 
 close:
 	for {
-
 		// Wait for a message to arrive.
-		data, length, err := c.t.reqHandler.Read(c.ipAddress, c.reader)
+		data, length, err := c.tcp.reqHandler.Read(c.ipAddress, c.reader)
 		c.lastAct = time.Now().UTC()
 		c.nReads++
 
 		if err != nil {
-
 			// temporary is declared to test for the existence of
 			// the method coming from the net package.
 			type temporary interface {
@@ -107,11 +107,11 @@ close:
 
 		// Create the request.
 		r := Request{
-			TCP: c.t,
+			TCP: c.tcp,
 			TCPAddr: &net.TCPAddr{
 				IP:   net.ParseIP(ipAddress),
 				Port: port,
-				Zone: c.t.tcpAddr.Zone,
+				Zone: c.tcp.tcpAddr.Zone,
 			},
 			IsIPv6:  c.isIPv6,
 			ReadAt:  c.lastAct,
@@ -122,11 +122,6 @@ close:
 
 		// Process the request on this goroutine that is
 		// handling the socket connection.
-		c.t.reqHandler.Process(&r)
+		c.tcp.reqHandler.Process(&r)
 	}
-
-	// Remove from the list of connections and report we are done.
-	c.t.remove(c.conn)
-	c.wg.Done()
-	c.t.log(EvtDrop, TypTrigger, c.ipAddress, "dropped connection")
 }

@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"maps"
 	"net"
 	"strconv"
 	"sync"
@@ -12,10 +11,12 @@ import (
 	"time"
 )
 
+type internalLogger func(evt int, typ int, ipAddress string, format string, a ...any)
+
 // TCP contains a set of networked client connections.
 type TCP struct {
 	name                   string
-	log                    func(evt int, typ int, ipAddress string, format string, a ...any)
+	log                    internalLogger
 	netType                string
 	addr                   string
 	connHandler            ConnHandler
@@ -24,12 +25,10 @@ type TCP struct {
 	ipAddress              string
 	port                   int
 	tcpAddr                *net.TCPAddr
-	listener               *net.TCPListener
-	listenerMu             sync.RWMutex
-	clients                map[string]*client
-	clientsMu              sync.RWMutex
+	listener               *listener
+	clients                *clients
 	wgStartG               sync.WaitGroup
-	shuttingDown           int32
+	shuttingDown           atomic.Bool
 	lastAcceptedConnection time.Time
 }
 
@@ -63,7 +62,8 @@ func New(name string, cfg Config) (*TCP, error) {
 		ipAddress:   tcpAddr.IP.String(),
 		port:        tcpAddr.Port,
 		tcpAddr:     tcpAddr,
-		clients:     make(map[string]*client),
+		listener:    newListener(),
+		clients:     newClients(l),
 	}
 
 	return &t, nil
@@ -76,7 +76,7 @@ func (t *TCP) Name() string {
 
 // Start creates the accept routine and begins to accept connections.
 func (t *TCP) Start() error {
-	if t.tcpListener() != nil {
+	if t.listener.tcpListener() != nil {
 		return errors.New("this TCP has already been started")
 	}
 
@@ -90,12 +90,12 @@ func (t *TCP) Start() error {
 
 	startlistener:
 		for {
-			if atomic.LoadInt32(&t.shuttingDown) != 0 {
-				t.resetTCPListener()
+			if t.shuttingDown.Load() {
+				t.listener.reset()
 				break
 			}
 
-			listener, err := t.startTCPListener()
+			listener, err := t.listener.start(t.netType, t.tcpAddr)
 			if err != nil {
 				// TODO: Use Context to control the retry / cancel.
 				t.log(EvtAccept, TypError, "", err.Error())
@@ -108,8 +108,8 @@ func (t *TCP) Start() error {
 			for {
 				conn, err := listener.Accept()
 				if err != nil {
-					if atomic.LoadInt32(&t.shuttingDown) != 0 {
-						t.resetTCPListener()
+					if t.shuttingDown.Load() {
+						t.listener.reset()
 						break startlistener
 					}
 
@@ -120,15 +120,16 @@ func (t *TCP) Start() error {
 					}
 
 					if e, ok := err.(temporary); ok && !e.Temporary() {
-						t.resetTCPListener()
+						t.listener.reset()
 						continue startlistener
 					}
 
 					continue
 				}
 
-				// Add this new connection to the manager map.
-				t.join(conn)
+				// Add this new connection to the manager map and
+				// start the client goroutine.
+				t.startNewClient(conn)
 			}
 		}
 	}()
@@ -141,12 +142,12 @@ func (t *TCP) Stop() error {
 	t.log(EvtStop, TypInfo, "", "started")
 	defer t.log(EvtStop, TypInfo, "", "completed")
 
-	atomic.StoreInt32(&t.shuttingDown, 1)
+	t.shuttingDown.Store(true)
 
-	t.resetTCPListener()
+	t.listener.reset()
 
-	for _, c := range t.copyClients() {
-		c.drop()
+	for _, c := range t.clients.copy() {
+		c.close()
 	}
 
 	t.wgStartG.Wait()
@@ -154,66 +155,36 @@ func (t *TCP) Stop() error {
 	return nil
 }
 
-// Drop will close the socket connection.
-func (t *TCP) Drop(tcpAddr *net.TCPAddr) error {
-
-	// Find the client connection for this IPAddress.
-	var c *client
-	t.clientsMu.Lock()
-	{
-		// Validate this ipaddress and socket exists first.
-		var ok bool
-		if c, ok = t.clients[tcpAddr.String()]; !ok {
-			t.clientsMu.Unlock()
-			return fmt.Errorf("IP[ %s ] : disconnected", tcpAddr.String())
-		}
+// CloseClient will close the client socket connection.
+func (t *TCP) CloseClient(tcpAddr *net.TCPAddr) error {
+	c, err := t.clients.find(tcpAddr)
+	if err != nil {
+		return fmt.Errorf("IP[ %s ] : disconnected", tcpAddr.String())
 	}
-	t.clientsMu.Unlock()
 
 	// Drop the connection using a goroutine since we are on the
 	// socket goroutine most likely.
-	go c.drop()
+	go c.close()
+
 	return nil
 }
 
 // Send will deliver the response back to the client.
 func (t *TCP) Send(ctx context.Context, r *Response) error {
-
-	// Find the client connection for this IPAddress.
-	var c *client
-	t.clientsMu.Lock()
-	{
-		// Validate this ipaddress and socket exists first.
-		var ok bool
-		if c, ok = t.clients[r.TCPAddr.String()]; !ok {
-			t.clientsMu.Unlock()
-			return fmt.Errorf("IP[ %s ] : disconnected", r.TCPAddr.String())
-		}
-
-		// Increment the number of writes.
-		c.nWrites++
+	c, err := t.clients.find(r.TCPAddr)
+	if err != nil {
+		return fmt.Errorf("IP[ %s ] : disconnected", r.TCPAddr.String())
 	}
-	t.clientsMu.Unlock()
 
-	// Send the response.
 	return t.respHandler.Write(r, c.writer)
 }
 
 // SendAll will deliver the response back to all connected clients.
 func (t *TCP) SendAll(ctx context.Context, r *Response) error {
-	var clts []*client
-	t.clientsMu.Lock()
-	{
-		for _, c := range t.clients {
-			clts = append(clts, c)
-			c.nWrites++
-		}
-	}
-	t.clientsMu.Unlock()
+	clients := t.clients.copy()
 
-	// TODO: Consider doing this in parallel.
 	var errors Errors
-	for _, c := range clts {
+	for _, c := range clients {
 		if err := t.respHandler.Write(r, c.writer); err != nil {
 			errors = append(errors, err)
 		}
@@ -222,6 +193,7 @@ func (t *TCP) SendAll(ctx context.Context, r *Response) error {
 	if errors != nil {
 		return errors
 	}
+
 	return nil
 }
 
@@ -231,174 +203,44 @@ func (t *TCP) Addr() net.Addr {
 	return t.tcpAddr
 }
 
-// Connections returns the number of client connections.
-func (t *TCP) Connections() int {
-	var l int
-
-	t.clientsMu.Lock()
-	{
-		l = len(t.clients)
-	}
-	t.clientsMu.Unlock()
-
-	return l
-}
-
-// =============================================================================
-
-func (t *TCP) tcpListener() *net.TCPListener {
-	t.listenerMu.RLock()
-	defer t.listenerMu.RUnlock()
-
-	return t.listener
-}
-
-func (t *TCP) resetTCPListener() {
-	t.listenerMu.Lock()
-	defer t.listenerMu.Unlock()
-
-	t.listener.Close()
-	t.listener = nil
-}
-
-func (t *TCP) startTCPListener() (*net.TCPListener, error) {
-	t.listenerMu.Lock()
-	defer t.listenerMu.Unlock()
-
-	listener, err := net.ListenTCP(t.netType, t.tcpAddr)
-	if err != nil {
-		return nil, err
-	}
-
-	t.listener = listener
-
-	return listener, nil
-}
-
-func (t *TCP) copyClients() map[string]*client {
-	t.clientsMu.RLock()
-	defer t.clientsMu.RUnlock()
-
-	clients := make(map[string]*client)
-	maps.Copy(clients, t.clients)
-
-	return clients
-}
-
-// =============================================================================
-
-// Stat represents a client statistic.
-type Stat struct {
-	IP       string
-	Reads    int
-	Writes   int
-	TimeConn time.Time
-	LastAct  time.Time
-}
-
-// ClientStats return details for all active clients.
-func (t *TCP) ClientStats() []Stat {
-	var clts []*client
-	t.clientsMu.Lock()
-	{
-		for _, v := range t.clients {
-			clts = append(clts, v)
-		}
-	}
-	t.clientsMu.Unlock()
-
-	stats := make([]Stat, len(clts))
-	for i, c := range clts {
-		stats[i] = Stat{
-			IP:       c.ipAddress,
-			Reads:    c.nReads,
-			Writes:   c.nWrites,
-			TimeConn: c.timeConn,
-			LastAct:  c.lastAct,
-		}
-	}
-
-	return stats
-}
-
 // Clients returns the number of active clients connected.
 func (t *TCP) Clients() int {
-	var count int
-	t.clientsMu.Lock()
-	{
-		count = len(t.clients)
-	}
-	t.clientsMu.Unlock()
-
-	return count
+	return t.clients.count()
 }
 
 // Groom drops connections that are not active for the specified duration.
 func (t *TCP) Groom(d time.Duration) {
-	var clts []*client
-	t.clientsMu.Lock()
-	{
-		for _, v := range t.clients {
-			clts = append(clts, v)
-		}
-	}
-	t.clientsMu.Unlock()
+	client := t.clients.copy()
 
 	now := time.Now().UTC()
-	for _, c := range clts {
+	for _, c := range client {
 		sub := now.Sub(c.lastAct)
 		if sub >= d {
-
 			// TODO
 			// This is a blocking call that waits for the socket goroutine
 			// to report its done. This parallel call should work well since
 			// there is no error handling needed.
 			t.log(EvtGroom, TypInfo, c.ipAddress, "Last[ %v ] Dur[ %v ]", c.lastAct.Format(time.RFC3339), sub)
-			go c.drop()
+			go c.close()
 		}
 	}
 }
 
-// join takes a new connection and adds it to the manager.
-func (t *TCP) join(conn net.Conn) {
-	ipAddress := conn.RemoteAddr().String()
-	t.log(EvtJoin, TypTrigger, ipAddress, "new connection")
+// =============================================================================
 
-	t.clientsMu.Lock()
-	{
-		// Validate this has not been joined already.
-		if _, ok := t.clients[ipAddress]; ok {
-			t.log(EvtJoin, TypError, ipAddress, "already connected")
-			conn.Close()
+// startNewClient takes a new connection and adds it to the manager.
+func (t *TCP) startNewClient(conn net.Conn) {
+	tcpAddr := conn.RemoteAddr().(*net.TCPAddr)
 
-			t.clientsMu.Unlock()
-			return
-		}
-
-		// Add the client connection to the map.
-		t.clients[ipAddress] = newClient(t, conn)
+	if _, err := t.clients.find(tcpAddr); err == nil {
+		t.log(EvtJoin, TypError, tcpAddr.IP.String(), "already connected")
+		conn.Close()
+		return
 	}
-	t.clientsMu.Unlock()
-}
 
-// remove deletes a connection from the manager.
-func (t *TCP) remove(conn net.Conn) {
-	ipAddress := conn.RemoteAddr().String()
+	c := newClient(t, conn)
 
-	t.clientsMu.Lock()
-	{
-		// Validate this has not been removed already.
-		if _, ok := t.clients[ipAddress]; !ok {
-			t.log(EvtRemove, TypError, ipAddress, "already removed")
-			t.clientsMu.Unlock()
-			return
-		}
+	t.clients.add(c)
 
-		// Remove the client connection from the map.
-		delete(t.clients, ipAddress)
-	}
-	t.clientsMu.Unlock()
-
-	// Close the connection for safe keeping.
-	conn.Close()
+	c.start()
 }
