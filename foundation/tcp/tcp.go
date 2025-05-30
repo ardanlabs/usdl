@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"maps"
 	"net"
 	"strconv"
 	"sync"
@@ -20,16 +21,14 @@ type TCP struct {
 	connHandler            ConnHandler
 	reqHandler             ReqHandler
 	respHandler            RespHandler
-	connRateLimit          ConnRateLimit
 	ipAddress              string
 	port                   int
 	tcpAddr                *net.TCPAddr
 	listener               *net.TCPListener
 	listenerMu             sync.RWMutex
 	clients                map[string]*client
-	clientsMu              sync.Mutex
-	wgAccept               sync.WaitGroup
-	dropConns              int32
+	clientsMu              sync.RWMutex
+	wgStartG               sync.WaitGroup
 	shuttingDown           int32
 	lastAcceptedConnection time.Time
 }
@@ -54,18 +53,17 @@ func New(name string, cfg Config) (*TCP, error) {
 
 	// Create a TCP for this ipaddress and port.
 	t := TCP{
-		name:          name,
-		log:           l,
-		netType:       cfg.NetType,
-		addr:          cfg.Addr,
-		connHandler:   cfg.ConnHandler,
-		reqHandler:    cfg.ReqHandler,
-		respHandler:   cfg.RespHandler,
-		connRateLimit: cfg.ConnRateLimit,
-		ipAddress:     tcpAddr.IP.String(),
-		port:          tcpAddr.Port,
-		tcpAddr:       tcpAddr,
-		clients:       make(map[string]*client),
+		name:        name,
+		log:         l,
+		netType:     cfg.NetType,
+		addr:        cfg.Addr,
+		connHandler: cfg.ConnHandler,
+		reqHandler:  cfg.ReqHandler,
+		respHandler: cfg.RespHandler,
+		ipAddress:   tcpAddr.IP.String(),
+		port:        tcpAddr.Port,
+		tcpAddr:     tcpAddr,
+		clients:     make(map[string]*client),
 	}
 
 	return &t, nil
@@ -76,68 +74,43 @@ func (t *TCP) Name() string {
 	return t.name
 }
 
-func (t *TCP) tcpListener() *net.TCPListener {
-	t.listenerMu.RLock()
-	defer t.listenerMu.RUnlock()
-
-	return t.listener
-}
-
-func (t *TCP) resetTCPListener() {
-	t.listenerMu.Lock()
-	defer t.listenerMu.Unlock()
-
-	t.listener.Close()
-	t.listener = nil
-}
-
-func (t *TCP) startTCPListener() (*net.TCPListener, error) {
-	t.listenerMu.Lock()
-	defer t.listenerMu.Unlock()
-
-	fmt.Println("START TCP LISTENER", t.tcpAddr)
-
-	listener, err := net.ListenTCP(t.netType, t.tcpAddr)
-	if err != nil {
-		return nil, err
-	}
-
-	t.listener = listener
-
-	return listener, nil
-}
-
 // Start creates the accept routine and begins to accept connections.
 func (t *TCP) Start() error {
 	if t.tcpListener() != nil {
 		return errors.New("this TCP has already been started")
 	}
 
-	t.wgAccept.Add(1)
+	t.wgStartG.Add(1)
 
 	go func() {
 		defer func() {
-			t.log(EvtAccept, TypError, net.JoinHostPort(t.ipAddress, strconv.Itoa(t.port)), "shutdown")
-			t.wgAccept.Done()
+			t.log(EvtAccept, TypInfo, net.JoinHostPort(t.ipAddress, strconv.Itoa(t.port)), "shutdown")
+			t.wgStartG.Done()
 		}()
 
-	endmainloop:
+	startlistener:
 		for {
+			if atomic.LoadInt32(&t.shuttingDown) != 0 {
+				t.resetTCPListener()
+				break
+			}
+
 			listener, err := t.startTCPListener()
 			if err != nil {
+				// TODO: Use Context to control the retry / cancel.
 				t.log(EvtAccept, TypError, "", err.Error())
-				panic(err)
+				time.Sleep(200 * time.Millisecond)
+				continue
 			}
 
 			t.log(EvtAccept, TypInfo, net.JoinHostPort(t.ipAddress, strconv.Itoa(t.port)), "waiting")
 
-		endacceptloop:
 			for {
 				conn, err := listener.Accept()
 				if err != nil {
 					if atomic.LoadInt32(&t.shuttingDown) != 0 {
 						t.resetTCPListener()
-						break endmainloop
+						break startlistener
 					}
 
 					t.log(EvtAccept, TypError, conn.RemoteAddr().String(), err.Error())
@@ -148,33 +121,10 @@ func (t *TCP) Start() error {
 
 					if e, ok := err.(temporary); ok && !e.Temporary() {
 						t.resetTCPListener()
-						break endacceptloop
+						continue startlistener
 					}
 
 					continue
-				}
-
-				// Check if we are being asked to drop all new connections.
-				if drop := atomic.LoadInt32(&t.dropConns); drop == 1 {
-					t.log(EvtAccept, TypInfo, "", "dropping new connection")
-					conn.Close()
-					continue
-				}
-
-				// Check if rate limit is enabled.
-				if t.connRateLimit != nil {
-					now := time.Now().UTC()
-
-					// We will only accept 1 connection per duration. Anything
-					// connection above that must be dropped.
-					if t.lastAcceptedConnection.Add(t.connRateLimit()).After(now) {
-						t.log(EvtAccept, TypError, conn.RemoteAddr().String(), "rate limit drop : Local[ %v ] Limit[ %v ]", conn.LocalAddr(), t.connRateLimit())
-						conn.Close()
-						continue
-					}
-
-					// Since we accepted connection, mark the time.
-					t.lastAcceptedConnection = now
 				}
 
 				// Add this new connection to the manager map.
@@ -188,48 +138,18 @@ func (t *TCP) Start() error {
 
 // Stop shuts down the manager and closes all connections.
 func (t *TCP) Stop() error {
-	t.listenerMu.Lock()
-	{
-		// If the listener has been stopped already, return an error.
-		if t.listener == nil {
-			t.listenerMu.Unlock()
-			return errors.New("this TCP has already been stopped")
-		}
-	}
-	t.listenerMu.Unlock()
+	t.log(EvtStop, TypInfo, "", "started")
+	defer t.log(EvtStop, TypInfo, "", "completed")
 
-	// Mark that we are shutting down.
 	atomic.StoreInt32(&t.shuttingDown, 1)
 
-	// Don't accept anymore client connections.
-	t.listenerMu.Lock()
-	{
-		t.listener.Close()
-	}
-	t.listenerMu.Unlock()
+	t.resetTCPListener()
 
-	// Make a copy of all the connections. We need to do this
-	// since we have to lock the map to read it. Dropping a
-	// connection requires locks as well.
-	var clients map[string]*client
-	t.clientsMu.Lock()
-	{
-		clients = make(map[string]*client)
-		for k, v := range t.clients {
-			clients[k] = v
-		}
-	}
-	t.clientsMu.Unlock()
-
-	// Drop all the existing connections.
-	for _, c := range clients {
-
-		// This waits for each routine to terminate.
+	for _, c := range t.copyClients() {
 		c.drop()
 	}
 
-	// Wait for the accept routine to terminate.
-	t.wgAccept.Wait()
+	t.wgStartG.Wait()
 
 	return nil
 }
@@ -305,17 +225,6 @@ func (t *TCP) SendAll(ctx context.Context, r *Response) error {
 	return nil
 }
 
-// DropConnections sets a flag to tell the accept routine to immediately
-// drop connections that come in.
-func (t *TCP) DropConnections(drop bool) {
-	if drop {
-		atomic.StoreInt32(&t.dropConns, 1)
-		return
-	}
-
-	atomic.StoreInt32(&t.dropConns, 0)
-}
-
 // Addr returns the listener's network address. This may be different than the values
 // provided in the configuration, for example if configuration port value is 0.
 func (t *TCP) Addr() net.Addr {
@@ -334,6 +243,49 @@ func (t *TCP) Connections() int {
 
 	return l
 }
+
+// =============================================================================
+
+func (t *TCP) tcpListener() *net.TCPListener {
+	t.listenerMu.RLock()
+	defer t.listenerMu.RUnlock()
+
+	return t.listener
+}
+
+func (t *TCP) resetTCPListener() {
+	t.listenerMu.Lock()
+	defer t.listenerMu.Unlock()
+
+	t.listener.Close()
+	t.listener = nil
+}
+
+func (t *TCP) startTCPListener() (*net.TCPListener, error) {
+	t.listenerMu.Lock()
+	defer t.listenerMu.Unlock()
+
+	listener, err := net.ListenTCP(t.netType, t.tcpAddr)
+	if err != nil {
+		return nil, err
+	}
+
+	t.listener = listener
+
+	return listener, nil
+}
+
+func (t *TCP) copyClients() map[string]*client {
+	t.clientsMu.RLock()
+	defer t.clientsMu.RUnlock()
+
+	clients := make(map[string]*client)
+	maps.Copy(clients, t.clients)
+
+	return clients
+}
+
+// =============================================================================
 
 // Stat represents a client statistic.
 type Stat struct {

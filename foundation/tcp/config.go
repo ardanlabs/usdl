@@ -2,7 +2,6 @@ package tcp
 
 import (
 	"errors"
-	"time"
 )
 
 // Set of error variables for start up.
@@ -14,21 +13,17 @@ var (
 	ErrInvalidLoggerHandler = errors.New("invalid logger handler configuration")
 )
 
-// ConnRateLimit is used to set a rate limit for accepting new connections.
-type ConnRateLimit func() time.Duration
-
 // Logger defines an handler used to help log events.
 type Logger func(evt string, typ string, ipAddress string, format string, a ...any)
 
 // Config provides a data structure of required configuration parameters.
 type Config struct {
-	NetType       string        // "tcp", tcp4" or "tcp6"
-	Addr          string        // "host:port" or "[ipv6-host%zone]:port"
-	ConnHandler   ConnHandler   // Support for binding new connections to a reader and writer.
-	ReqHandler    ReqHandler    // Support for handling the specific request workflow.
-	RespHandler   RespHandler   // Support for handling the specific response workflow.
-	ConnRateLimit ConnRateLimit // Support for limiting the rate of new connections.
-	Logger        Logger        // Support for logging events that occur in the TCP listener.
+	NetType     string      // "tcp", tcp4" or "tcp6"
+	Addr        string      // "host:port" or "[ipv6-host%zone]:port"
+	ConnHandler ConnHandler // Support for binding new connections to a reader and writer.
+	ReqHandler  ReqHandler  // Support for handling the specific request workflow.
+	RespHandler RespHandler // Support for handling the specific response workflow.
+	Logger      Logger      // Support for logging events that occur in the TCP listener.
 }
 
 func (cfg Config) validate() error {

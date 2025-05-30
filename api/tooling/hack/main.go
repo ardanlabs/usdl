@@ -57,8 +57,10 @@ func run() error {
 		return fmt.Errorf("starting the TCP listener: %w", err)
 	}
 	defer func() {
-		fmt.Println("CALLING STOP")
-		u.Stop()
+		fmt.Println("***> CALLING STOP")
+		if err := u.Stop(); err != nil {
+			fmt.Printf("stopping the TCP listener: %s", err)
+		}
 	}()
 
 	// -------------------------------------------------------------------------
@@ -68,11 +70,11 @@ func run() error {
 		fmt.Println("**************************************")
 
 		var conn net.Conn
-		for i := range 10 {
-			fmt.Println("Waiting for server to start...")
+		for i := range 1 {
+			fmt.Println("***> Waiting for server to start...")
 			time.Sleep(300 * time.Millisecond)
 
-			fmt.Println("Try Client Conenction:", i+1)
+			fmt.Println("***> Try Client Conenction:", i+1)
 			if i == 9 {
 				return errors.New("unable to connect to server after 10 attempts")
 			}
@@ -89,10 +91,14 @@ func run() error {
 			break
 		}
 
+		if conn == nil {
+			return errors.New("connection is nil, unable to connect to server")
+		}
+
 		bufReader := bufio.NewReader(conn)
 		bufWriter := bufio.NewWriter(conn)
 
-		fmt.Print("CLIENT: SEND:", "Hello\n")
+		fmt.Print("***> CLIENT: SEND:", "Hello\n")
 
 		if _, err := bufWriter.WriteString("Hello\n"); err != nil {
 			return fmt.Errorf("sending data to the connection: %w", err)
@@ -104,7 +110,7 @@ func run() error {
 			return fmt.Errorf("reading response from the connection: %w", err)
 		}
 
-		fmt.Println("CLIENT: RECV:", response)
+		fmt.Println("***> CLIENT: RECV:", response)
 	}
 
 	return nil
@@ -128,7 +134,7 @@ type tcpReqHandler struct{}
 func (tcpReqHandler) Read(ipAddress string, reader io.Reader) ([]byte, int, error) {
 	bufReader := reader.(*bufio.Reader)
 
-	fmt.Println("SERVER: WAITING ON READ")
+	fmt.Println("***> SERVER: WAITING ON READ")
 
 	// Read a small string to keep the code simple.
 	line, err := bufReader.ReadString('\n')
@@ -136,14 +142,14 @@ func (tcpReqHandler) Read(ipAddress string, reader io.Reader) ([]byte, int, erro
 		return nil, 0, err
 	}
 
-	fmt.Println("SERVER: MESSAGE READ")
+	fmt.Println("***> SERVER: MESSAGE READ")
 
 	return []byte(line), len(line), nil
 }
 
 // Process is used to handle the processing of the message.
 func (tcpReqHandler) Process(r *tcp.Request) {
-	fmt.Println("SERVER: CLIENT MESSAGE:", string(r.Data))
+	fmt.Println("***> SERVER: CLIENT MESSAGE:", string(r.Data))
 
 	resp := tcp.Response{
 		TCPAddr: r.TCPAddr,
@@ -151,7 +157,7 @@ func (tcpReqHandler) Process(r *tcp.Request) {
 		Length:  7,
 	}
 
-	fmt.Println("SERVER: SEND:", string(resp.Data))
+	fmt.Println("***> SERVER: SEND:", string(resp.Data))
 
 	r.TCP.Send(r.Context, &resp)
 }

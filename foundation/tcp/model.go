@@ -10,6 +10,7 @@ const (
 	EvtRemove
 	EvtDrop
 	EvtGroom
+	EvtStop
 )
 
 // Set of event sub types.
@@ -26,6 +27,7 @@ var eventTypes = map[int]string{
 	EvtRemove: "remove",
 	EvtDrop:   "drop",
 	EvtGroom:  "groom",
+	EvtStop:   "stop",
 }
 
 var eventSubTypes = map[int]string{
