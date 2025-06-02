@@ -9,7 +9,7 @@ import (
 
 // Request is the message received by the client.
 type Request struct {
-	TCP     *TCP
+	TCP     *Server
 	TCPAddr *net.TCPAddr
 	IsIPv6  bool
 	ReadAt  time.Time

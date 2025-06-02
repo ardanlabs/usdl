@@ -12,7 +12,7 @@ import (
 
 // client represents a single networked connection.
 type client struct {
-	tcp       *TCP
+	tcp       *Server
 	conn      net.Conn
 	ipAddress string
 	isIPv6    bool
@@ -26,7 +26,7 @@ type client struct {
 }
 
 // newClient creates a new client for an incoming connection.
-func newClient(tcp *TCP, conn net.Conn) *client {
+func newClient(tcp *Server, conn net.Conn) *client {
 	now := time.Now().UTC()
 	ipAddress := conn.RemoteAddr().String()
 

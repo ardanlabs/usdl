@@ -16,8 +16,10 @@ var (
 // Logger defines an handler used to help log events.
 type Logger func(evt string, typ string, ipAddress string, format string, a ...any)
 
-// Config provides a data structure of required configuration parameters.
-type Config struct {
+// =============================================================================
+
+// ServerConfig provides a data structure of required configuration parameters.
+type ServerConfig struct {
 	NetType     string      // "tcp", tcp4" or "tcp6"
 	Addr        string      // "host:port" or "[ipv6-host%zone]:port"
 	ConnHandler ConnHandler // Support for binding new connections to a reader and writer.
@@ -26,7 +28,7 @@ type Config struct {
 	Logger      Logger      // Support for logging events that occur in the TCP listener.
 }
 
-func (cfg Config) validate() error {
+func (cfg ServerConfig) validate() error {
 	if cfg.NetType != "tcp" && cfg.NetType != "tcp4" && cfg.NetType != "tcp6" {
 		return ErrInvalidNetType
 	}

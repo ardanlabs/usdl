@@ -17,7 +17,7 @@ func TestTCP(t *testing.T) {
 	t.Log("Given the need to listen and process TCP data.")
 	{
 		// Create a configuration.
-		cfg := tcp.Config{
+		cfg := tcp.ServerConfig{
 			NetType: "tcp4",
 			Addr:    ":0",
 
@@ -27,7 +27,7 @@ func TestTCP(t *testing.T) {
 		}
 
 		// Create a new TCP value.
-		u, err := tcp.New("TEST", cfg)
+		u, err := tcp.NewServer("TEST", cfg)
 		if err != nil {
 			t.Fatal("\tShould be able to create a new TCP listener.", "X", err)
 		}
@@ -91,7 +91,7 @@ func TestTCPAddr(t *testing.T) {
 	t.Log("Given the need to listen on any open port and know that bound address.")
 	{
 		// Create a configuration.
-		cfg := tcp.Config{
+		cfg := tcp.ServerConfig{
 			NetType: "tcp4",
 			Addr:    ":0", // Defer port assignment to OS.
 
@@ -101,7 +101,7 @@ func TestTCPAddr(t *testing.T) {
 		}
 
 		// Create a new TCP value.
-		u, err := tcp.New("TEST", cfg)
+		u, err := tcp.NewServer("TEST", cfg)
 		if err != nil {
 			t.Fatal("\tShould be able to create a new TCP listener.", "X", err)
 		}

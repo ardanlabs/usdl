@@ -13,8 +13,8 @@ import (
 
 type internalLogger func(evt int, typ int, ipAddress string, format string, a ...any)
 
-// TCP contains a set of networked client connections.
-type TCP struct {
+// Server contains a set of networked client connections.
+type Server struct {
 	name                   string
 	log                    internalLogger
 	netType                string
@@ -32,8 +32,8 @@ type TCP struct {
 	lastAcceptedConnection time.Time
 }
 
-// New creates a new manager to service clients.
-func New(name string, cfg Config) (*TCP, error) {
+// NewServer creates an API for a TCP server that can accept connections.
+func NewServer(name string, cfg ServerConfig) (*Server, error) {
 
 	// Validate the configuration.
 	if err := cfg.validate(); err != nil {
@@ -51,7 +51,7 @@ func New(name string, cfg Config) (*TCP, error) {
 	}
 
 	// Create a TCP for this ipaddress and port.
-	t := TCP{
+	t := Server{
 		name:        name,
 		log:         l,
 		netType:     cfg.NetType,
@@ -70,12 +70,12 @@ func New(name string, cfg Config) (*TCP, error) {
 }
 
 // Name returns the name of the TCP manager.
-func (t *TCP) Name() string {
+func (t *Server) Name() string {
 	return t.name
 }
 
 // Shutdown shuts down the manager and closes all connections.
-func (t *TCP) Shutdown(ctx context.Context) error {
+func (t *Server) Shutdown(ctx context.Context) error {
 	t.log(EvtStop, TypInfo, "", "started shutdown")
 	defer t.log(EvtStop, TypInfo, "", "completed shutdown")
 
@@ -106,7 +106,7 @@ func (t *TCP) Shutdown(ctx context.Context) error {
 }
 
 // Listen creates the accept routine and begins to accept connections.
-func (t *TCP) Listen() error {
+func (t *Server) Listen() error {
 	if t.listener.tcpListener() != nil {
 		return errors.New("this TCP has already been started")
 	}
@@ -173,7 +173,7 @@ func (t *TCP) Listen() error {
 }
 
 // CloseClient will close the client socket connection.
-func (t *TCP) CloseClient(tcpAddr *net.TCPAddr) error {
+func (t *Server) CloseClient(tcpAddr *net.TCPAddr) error {
 	c, err := t.clients.find(tcpAddr)
 	if err != nil {
 		return fmt.Errorf("IP[ %s ] : disconnected", tcpAddr.String())
@@ -187,7 +187,7 @@ func (t *TCP) CloseClient(tcpAddr *net.TCPAddr) error {
 }
 
 // Send will deliver the response back to the client.
-func (t *TCP) Send(ctx context.Context, r *Response) error {
+func (t *Server) Send(ctx context.Context, r *Response) error {
 	c, err := t.clients.find(r.TCPAddr)
 	if err != nil {
 		return fmt.Errorf("IP[ %s ] : disconnected", r.TCPAddr.String())
@@ -197,7 +197,7 @@ func (t *TCP) Send(ctx context.Context, r *Response) error {
 }
 
 // SendAll will deliver the response back to all connected clients.
-func (t *TCP) SendAll(ctx context.Context, r *Response) error {
+func (t *Server) SendAll(ctx context.Context, r *Response) error {
 	clients := t.clients.copy()
 
 	var errors Errors
@@ -216,17 +216,17 @@ func (t *TCP) SendAll(ctx context.Context, r *Response) error {
 
 // Addr returns the listener's network address. This may be different than the values
 // provided in the configuration, for example if configuration port value is 0.
-func (t *TCP) Addr() net.Addr {
+func (t *Server) Addr() net.Addr {
 	return t.tcpAddr
 }
 
 // Clients returns the number of active clients connected.
-func (t *TCP) Clients() int {
+func (t *Server) Clients() int {
 	return t.clients.count()
 }
 
 // Groom drops connections that are not active for the specified duration.
-func (t *TCP) Groom(d time.Duration) {
+func (t *Server) Groom(d time.Duration) {
 	client := t.clients.copy()
 
 	now := time.Now().UTC()
@@ -246,7 +246,7 @@ func (t *TCP) Groom(d time.Duration) {
 // =============================================================================
 
 // startNewClient takes a new connection and adds it to the manager.
-func (t *TCP) startNewClient(conn net.Conn) {
+func (t *Server) startNewClient(conn net.Conn) {
 	tcpAddr := conn.RemoteAddr().(*net.TCPAddr)
 
 	if _, err := t.clients.find(tcpAddr); err == nil {

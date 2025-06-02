@@ -41,7 +41,7 @@ func run() error {
 		log.Printf("EVENT: %s, %s, %s, %s", evt, typ, ipAddress, fmt.Sprintf(format, a...))
 	}
 
-	cfg := tcp.Config{
+	cfg := tcp.ServerConfig{
 		NetType:     "tcp4",
 		Addr:        "0.0.0.0:3001",
 		ConnHandler: tcpConnHandler{},
@@ -51,7 +51,7 @@ func run() error {
 	}
 
 	// Create a new TCP value.
-	u, err := tcp.New("TEST", cfg)
+	server, err := tcp.NewServer("TEST", cfg)
 	if err != nil {
 		return fmt.Errorf("creating new TCP listener: %w", err)
 	}
@@ -60,7 +60,7 @@ func run() error {
 
 	go func() {
 		fmt.Println("***> START LISTENING")
-		serverErrors <- u.Listen()
+		serverErrors <- server.Listen()
 	}()
 
 	go func() {
@@ -85,7 +85,7 @@ func run() error {
 		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 		defer cancel()
 
-		if err := u.Shutdown(ctx); err != nil {
+		if err := server.Shutdown(ctx); err != nil {
 			return fmt.Errorf("could not stop server gracefully: %w", err)
 		}
 	}
@@ -93,7 +93,7 @@ func run() error {
 	return nil
 }
 
-func tcpClient(cfg tcp.Config) error {
+func tcpClient(cfg tcp.ServerConfig) error {
 	for i := range 2 {
 		go func() {
 			var conn net.Conn
