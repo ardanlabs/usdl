@@ -13,8 +13,11 @@ import (
 	"log"
 	"net"
 	"os"
+	"os/signal"
 	"path/filepath"
 	"sync"
+	"sync/atomic"
+	"syscall"
 	"time"
 
 	"github.com/ardanlabs/usdl/foundation/tcp"
@@ -53,64 +56,89 @@ func run() error {
 		return fmt.Errorf("creating new TCP listener: %w", err)
 	}
 
-	if err := u.Start(); err != nil {
-		return fmt.Errorf("starting the TCP listener: %w", err)
-	}
-	defer func() {
-		fmt.Println("***> CALLING STOP")
-		if err := u.Stop(); err != nil {
-			fmt.Printf("stopping the TCP listener: %s", err)
-		}
+	serverErrors := make(chan error, 1)
+
+	go func() {
+		fmt.Println("***> START LISTENING")
+		serverErrors <- u.Listen()
+	}()
+
+	go func() {
+		fmt.Println("***> START CLIENT TEST")
+		tcpClient(cfg)
 	}()
 
 	// -------------------------------------------------------------------------
-	// CLIENT SIDE
+	// Shutdown
 
-	for range 2 {
-		fmt.Println("**************************************")
+	shutdown := make(chan os.Signal, 1)
+	signal.Notify(shutdown, syscall.SIGINT, syscall.SIGTERM)
 
-		var conn net.Conn
-		for i := range 1 {
-			fmt.Println("***> Waiting for server to start...")
+	select {
+	case err := <-serverErrors:
+		return fmt.Errorf("server error: %w", err)
+
+	case sig := <-shutdown:
+		fmt.Println("shutdown started", "signal", sig)
+		defer fmt.Println("shutdown complete", "signal", sig)
+
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+		defer cancel()
+
+		if err := u.Shutdown(ctx); err != nil {
+			return fmt.Errorf("could not stop server gracefully: %w", err)
+		}
+	}
+
+	return nil
+}
+
+func tcpClient(cfg tcp.Config) error {
+	for i := range 2 {
+		go func() {
+			var conn net.Conn
+
+			fmt.Println(i, "***> Waiting for server to start...")
 			time.Sleep(300 * time.Millisecond)
 
 			fmt.Println("***> Try Client Conenction:", i+1)
 			if i == 9 {
-				return errors.New("unable to connect to server after 10 attempts")
+				fmt.Println(i, "unable to connect to server after 10 attempts")
+				return
 			}
 
+			var err error
 			conn, err = net.Dial(cfg.NetType, cfg.Addr)
 			if err != nil {
-				if i < 10 {
-					continue
-				}
-
-				return fmt.Errorf("dialing a new TCP connection: %w", err)
+				fmt.Println(i, "dialing a new TCP connection: %w", err)
+				return
 			}
 			defer conn.Close()
-			break
-		}
 
-		if conn == nil {
-			return errors.New("connection is nil, unable to connect to server")
-		}
+			if conn == nil {
+				fmt.Println(i, "connection is nil, unable to connect to server")
+				return
+			}
 
-		bufReader := bufio.NewReader(conn)
-		bufWriter := bufio.NewWriter(conn)
+			bufReader := bufio.NewReader(conn)
+			bufWriter := bufio.NewWriter(conn)
 
-		fmt.Print("***> CLIENT: SEND:", "Hello\n")
+			fmt.Print("***> CLIENT: SEND:", "Hello\n")
 
-		if _, err := bufWriter.WriteString("Hello\n"); err != nil {
-			return fmt.Errorf("sending data to the connection: %w", err)
-		}
-		bufWriter.Flush()
+			if _, err := bufWriter.WriteString("Hello\n"); err != nil {
+				fmt.Println(i, "sending data to the connection: %w", err)
+				return
+			}
+			bufWriter.Flush()
 
-		response, err := bufReader.ReadString('\n')
-		if err != nil {
-			return fmt.Errorf("reading response from the connection: %w", err)
-		}
+			response, err := bufReader.ReadString('\n')
+			if err != nil {
+				fmt.Println(i, "reading response from the connection: %w", err)
+				return
+			}
 
-		fmt.Println("***> CLIENT: RECV:", response)
+			fmt.Println(i, "***> CLIENT: RECV:", response)
+		}()
 	}
 
 	return nil
@@ -129,12 +157,18 @@ func (tch tcpConnHandler) Bind(conn net.Conn) (io.Reader, io.Writer) {
 // tcpReqHandler is required to process client messages.
 type tcpReqHandler struct{}
 
+var bill atomic.Int64
+
 // Read implements the udp.ReqHandler interface. It is provided a request
 // value to popular and a io.Reader that was created in the Bind above.
 func (tcpReqHandler) Read(ipAddress string, reader io.Reader) ([]byte, int, error) {
 	bufReader := reader.(*bufio.Reader)
 
 	fmt.Println("***> SERVER: WAITING ON READ")
+
+	if bill.CompareAndSwap(0, 1) {
+		time.Sleep(100 * time.Second)
+	}
 
 	// Read a small string to keep the code simple.
 	line, err := bufReader.ReadString('\n')

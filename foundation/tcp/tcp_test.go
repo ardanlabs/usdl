@@ -2,6 +2,7 @@ package tcp_test
 
 import (
 	"bufio"
+	"context"
 	"net"
 	"sync/atomic"
 	"testing"
@@ -33,12 +34,12 @@ func TestTCP(t *testing.T) {
 		t.Log("\tShould be able to create a new TCP listener.", "OK")
 
 		// Start accepting client data.
-		if err := u.Start(); err != nil {
-			t.Fatal("\tShould be able to start the TCP listener.", "X", err)
-		}
-		t.Log("\tShould be able to start the TCP listener.", "OK")
-
-		defer u.Stop()
+		go func() {
+			if err := u.Listen(); err != nil {
+				t.Error("\tShould be able to start the TCP listener.", "X", err)
+			}
+			t.Log("\tShould be able to start the TCP listener.", "OK")
+		}()
 
 		// Let's connect back and send a TCP package
 		conn, err := net.Dial("tcp4", u.Addr().String())
@@ -80,6 +81,8 @@ func TestTCP(t *testing.T) {
 		} else {
 			t.Error("\tShould be less that 2 seconds.", "X", duration)
 		}
+
+		u.Shutdown(context.Background())
 	}
 }
 
@@ -110,11 +113,12 @@ func TestTCPAddr(t *testing.T) {
 		}
 		t.Log("\tAddr() should be nil before Start.", "OK")
 
-		// Start accepting client data.
-		if err := u.Start(); err != nil {
-			t.Fatal("\tShould be able to start the TCP listener.", "X", err)
-		}
-		defer u.Stop()
+		go func() {
+			// Start accepting client data.
+			if err := u.Listen(); err != nil {
+				t.Error("\tShould be able to start the TCP listener.", "X", err)
+			}
+		}()
 
 		// Addr should be non-nil after Start.
 		addr := u.Addr()
@@ -132,5 +136,7 @@ func TestTCPAddr(t *testing.T) {
 			t.Fatalf("\tAddr port should not be %q. %s", port, "X")
 		}
 		t.Logf("\tAddr() should be not be 0 after Start (port = %q). %s", port, "OK")
+
+		u.Shutdown(context.Background())
 	}
 }

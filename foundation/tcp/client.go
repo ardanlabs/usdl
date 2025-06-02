@@ -68,7 +68,7 @@ func (c *client) read() {
 	c.tcp.log(EvtRead, TypInfo, c.ipAddress, "client G started")
 
 	defer func() {
-		c.tcp.log(EvtDrop, TypInfo, c.ipAddress, "client G stopped")
+		c.tcp.log(EvtDrop, TypInfo, c.ipAddress, "client G disconnected")
 		c.tcp.clients.close(c.conn)
 		c.wg.Done()
 	}()

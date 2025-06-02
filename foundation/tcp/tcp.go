@@ -74,8 +74,39 @@ func (t *TCP) Name() string {
 	return t.name
 }
 
-// Start creates the accept routine and begins to accept connections.
-func (t *TCP) Start() error {
+// Shutdown shuts down the manager and closes all connections.
+func (t *TCP) Shutdown(ctx context.Context) error {
+	t.log(EvtStop, TypInfo, "", "started shutdown")
+	defer t.log(EvtStop, TypInfo, "", "completed shutdown")
+
+	t.shuttingDown.Store(true)
+
+	t.listener.reset()
+
+	ctx, cancel := context.WithCancel(ctx)
+
+	go func() {
+		defer cancel()
+
+		for _, c := range t.clients.copy() {
+			go c.close()
+		}
+	}()
+
+	<-ctx.Done()
+
+	if ctx.Err() != nil {
+		t.log(EvtStop, TypInfo, "", "cancelled shutdown")
+		return ctx.Err()
+	}
+
+	t.wgStartG.Wait()
+
+	return nil
+}
+
+// Listen creates the accept routine and begins to accept connections.
+func (t *TCP) Listen() error {
 	if t.listener.tcpListener() != nil {
 		return errors.New("this TCP has already been started")
 	}
@@ -84,13 +115,14 @@ func (t *TCP) Start() error {
 
 	go func() {
 		defer func() {
-			t.log(EvtAccept, TypInfo, net.JoinHostPort(t.ipAddress, strconv.Itoa(t.port)), "shutdown")
+			t.log(EvtAccept, TypInfo, net.JoinHostPort(t.ipAddress, strconv.Itoa(t.port)), "completed listener shutdown")
 			t.wgStartG.Done()
 		}()
 
 	startlistener:
 		for {
 			if t.shuttingDown.Load() {
+				t.log(EvtAccept, TypInfo, net.JoinHostPort(t.ipAddress, strconv.Itoa(t.port)), "started listener shutdown")
 				t.listener.reset()
 				break
 			}
@@ -109,6 +141,7 @@ func (t *TCP) Start() error {
 				conn, err := listener.Accept()
 				if err != nil {
 					if t.shuttingDown.Load() {
+						t.log(EvtAccept, TypInfo, net.JoinHostPort(t.ipAddress, strconv.Itoa(t.port)), "started listener shutdown")
 						t.listener.reset()
 						break startlistener
 					}
@@ -133,22 +166,6 @@ func (t *TCP) Start() error {
 			}
 		}
 	}()
-
-	return nil
-}
-
-// Stop shuts down the manager and closes all connections.
-func (t *TCP) Stop() error {
-	t.log(EvtStop, TypInfo, "", "started")
-	defer t.log(EvtStop, TypInfo, "", "completed")
-
-	t.shuttingDown.Store(true)
-
-	t.listener.reset()
-
-	for _, c := range t.clients.copy() {
-		c.close()
-	}
 
 	t.wgStartG.Wait()
 
