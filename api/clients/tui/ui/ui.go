@@ -56,6 +56,15 @@ func New(myAccountID common.Address, agent *ollamallm.Agent) *TUI {
 	list := tview.NewList()
 	list.SetBorder(true)
 	list.SetTitle("Users")
+
+	list.SetMouseCapture(func(action tview.MouseAction, event *tcell.EventMouse) (tview.MouseAction, *tcell.EventMouse) {
+		if action == tview.MouseLeftDoubleClick {
+			ui.establishUserConnection()
+		}
+
+		return action, event
+	})
+
 	list.SetChangedFunc(func(idx int, name string, id string, shortcut rune) {
 		textView.Clear()
 
@@ -331,4 +340,12 @@ func (ui *TUI) aiToggleHandler(agent bool) {
 		ui.aiToggle.SetBorderColor(tcell.ColorRed)
 		ui.aiMode = false
 	}
+}
+
+func (ui *TUI) establishUserConnection() {
+	idx := ui.list.GetCurrentItem()
+	name, _ := ui.list.GetItemText(idx)
+
+	fmt.Fprintln(ui.textView, "-----")
+	fmt.Fprintf(ui.textView, "Establishing Peer Connection with %s ...", name)
 }
