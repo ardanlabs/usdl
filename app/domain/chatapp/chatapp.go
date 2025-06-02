@@ -24,13 +24,13 @@ func newApp(log *logger.Logger, chat *chatbus.Business) *app {
 }
 
 func (a *app) connect(ctx context.Context, r *http.Request) web.Encoder {
-	usr, err := a.chat.Handshake(ctx, web.GetWriter(ctx), r)
+	usr, err := a.chat.UIHandshake(ctx, web.GetWriter(ctx), r)
 	if err != nil {
 		return errs.Newf(errs.FailedPrecondition, "handshake failed: %s", err)
 	}
 	defer usr.Conn.Close()
 
-	a.chat.ListenClient(ctx, usr)
+	a.chat.UIListen(ctx, usr)
 
 	return web.NewNoResponse()
 }
