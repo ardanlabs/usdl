@@ -11,7 +11,29 @@ import (
 	"time"
 )
 
-type internalLogger func(evt int, typ int, ipAddress string, format string, a ...any)
+// ServerConfig provides a data structure of required configuration parameters.
+type ServerConfig struct {
+	NetType  string   // "tcp", tcp4" or "tcp6"
+	Addr     string   // "host:port" or "[ipv6-host%zone]:port"
+	Handlers Handlers // Support for binding and handling requests.
+	Logger   Logger   // Support for logging events that occur in the TCP listener.
+}
+
+func (cfg ServerConfig) validate() error {
+	if cfg.NetType != "tcp" && cfg.NetType != "tcp4" && cfg.NetType != "tcp6" {
+		return ErrInvalidNetType
+	}
+
+	if cfg.Handlers == nil {
+		return ErrInvalidHandlers
+	}
+
+	if cfg.Logger == nil {
+		return ErrInvalidLoggerHandler
+	}
+
+	return nil
+}
 
 // Server contains a set of networked client connections.
 type Server struct {
@@ -19,9 +41,7 @@ type Server struct {
 	log                    internalLogger
 	netType                string
 	addr                   string
-	connHandler            ConnHandler
-	reqHandler             ReqHandler
-	respHandler            RespHandler
+	handlers               Handlers
 	ipAddress              string
 	port                   int
 	tcpAddr                *net.TCPAddr
@@ -34,13 +54,10 @@ type Server struct {
 
 // NewServer creates an API for a TCP server that can accept connections.
 func NewServer(name string, cfg ServerConfig) (*Server, error) {
-
-	// Validate the configuration.
 	if err := cfg.validate(); err != nil {
 		return nil, err
 	}
 
-	// Resolve the addr that is provided.
 	tcpAddr, err := net.ResolveTCPAddr(cfg.NetType, cfg.Addr)
 	if err != nil {
 		return nil, err
@@ -50,110 +67,107 @@ func NewServer(name string, cfg ServerConfig) (*Server, error) {
 		cfg.Logger(eventTypes[evt], eventSubTypes[typ], ipAddress, fmt.Sprintf(format, a...))
 	}
 
-	// Create a TCP for this ipaddress and port.
 	t := Server{
-		name:        name,
-		log:         l,
-		netType:     cfg.NetType,
-		addr:        cfg.Addr,
-		connHandler: cfg.ConnHandler,
-		reqHandler:  cfg.ReqHandler,
-		respHandler: cfg.RespHandler,
-		ipAddress:   tcpAddr.IP.String(),
-		port:        tcpAddr.Port,
-		tcpAddr:     tcpAddr,
-		listener:    newListener(),
-		clients:     newClients(l),
+		name:      name,
+		log:       l,
+		netType:   cfg.NetType,
+		addr:      cfg.Addr,
+		handlers:  cfg.Handlers,
+		ipAddress: tcpAddr.IP.String(),
+		port:      tcpAddr.Port,
+		tcpAddr:   tcpAddr,
+		listener:  newListener(),
+		clients:   newClients(l),
 	}
 
 	return &t, nil
 }
 
-// Name returns the name of the TCP manager.
-func (t *Server) Name() string {
-	return t.name
-}
-
 // Shutdown shuts down the manager and closes all connections.
-func (t *Server) Shutdown(ctx context.Context) error {
-	t.log(EvtStop, TypInfo, "", "started shutdown")
-	defer t.log(EvtStop, TypInfo, "", "completed shutdown")
+func (srv *Server) Shutdown(ctx context.Context) error {
+	srv.log(EvtStop, TypInfo, "", "started shutdown")
+	defer srv.log(EvtStop, TypInfo, "", "completed shutdown")
 
-	t.shuttingDown.Store(true)
+	srv.shuttingDown.Store(true)
 
-	t.listener.reset()
+	srv.listener.reset()
 
 	ctx, cancel := context.WithCancel(ctx)
 
 	go func() {
 		defer cancel()
 
-		for _, c := range t.clients.copy() {
+		for _, c := range srv.clients.copy() {
 			go c.close()
 		}
 	}()
 
 	<-ctx.Done()
 
-	if ctx.Err() != nil {
-		t.log(EvtStop, TypInfo, "", "cancelled shutdown")
+	if errors.Is(ctx.Err(), context.DeadlineExceeded) {
+		srv.log(EvtStop, TypInfo, "", "deadline exceeded")
 		return ctx.Err()
 	}
 
-	t.wgStartG.Wait()
+	srv.wgStartG.Wait()
 
 	return nil
 }
 
+// Name returns the name of the TCP manager.
+func (srv *Server) Name() string {
+	return srv.name
+}
+
 // Listen creates the accept routine and begins to accept connections.
-func (t *Server) Listen() error {
-	if t.listener.tcpListener() != nil {
+func (srv *Server) Listen() error {
+	if srv.listener.tcpListener() != nil {
 		return errors.New("this TCP has already been started")
 	}
 
-	t.wgStartG.Add(1)
+	srv.wgStartG.Add(1)
 
 	go func() {
 		defer func() {
-			t.log(EvtAccept, TypInfo, net.JoinHostPort(t.ipAddress, strconv.Itoa(t.port)), "completed listener shutdown")
-			t.wgStartG.Done()
+			srv.log(EvtAccept, TypInfo, net.JoinHostPort(srv.ipAddress, strconv.Itoa(srv.port)), "completed listener shutdown")
+			srv.wgStartG.Done()
 		}()
 
 	startlistener:
 		for {
-			if t.shuttingDown.Load() {
-				t.log(EvtAccept, TypInfo, net.JoinHostPort(t.ipAddress, strconv.Itoa(t.port)), "started listener shutdown")
-				t.listener.reset()
+			if srv.shuttingDown.Load() {
+				srv.log(EvtAccept, TypInfo, net.JoinHostPort(srv.ipAddress, strconv.Itoa(srv.port)), "started listener shutdown")
+				srv.listener.reset()
 				break
 			}
 
-			listener, err := t.listener.start(t.netType, t.tcpAddr)
+			listener, err := srv.listener.start(srv.netType, srv.tcpAddr)
 			if err != nil {
 				// TODO: Use Context to control the retry / cancel.
-				t.log(EvtAccept, TypError, "", err.Error())
+				srv.log(EvtAccept, TypError, "", err.Error())
 				time.Sleep(200 * time.Millisecond)
 				continue
 			}
 
-			t.log(EvtAccept, TypInfo, net.JoinHostPort(t.ipAddress, strconv.Itoa(t.port)), "waiting")
+			srv.log(EvtAccept, TypInfo, net.JoinHostPort(srv.ipAddress, strconv.Itoa(srv.port)), "waiting")
 
 			for {
 				conn, err := listener.Accept()
 				if err != nil {
-					if t.shuttingDown.Load() {
-						t.log(EvtAccept, TypInfo, net.JoinHostPort(t.ipAddress, strconv.Itoa(t.port)), "started listener shutdown")
-						t.listener.reset()
+					if srv.shuttingDown.Load() {
+						srv.log(EvtAccept, TypInfo, net.JoinHostPort(srv.ipAddress, strconv.Itoa(srv.port)), "started listener shutdown")
+						srv.listener.reset()
 						break startlistener
 					}
 
-					t.log(EvtAccept, TypError, conn.RemoteAddr().String(), err.Error())
+					srv.log(EvtAccept, TypError, conn.RemoteAddr().String(), err.Error())
 
 					type temporary interface {
 						Temporary() bool
 					}
 
 					if e, ok := err.(temporary); ok && !e.Temporary() {
-						t.listener.reset()
+						srv.listener.reset()
 						continue startlistener
 					}
 
@@ -162,19 +176,19 @@ func (t *Server) Listen() error {
 
 				// Add this new connection to the manager map and
 				// start the client goroutine.
-				t.startNewClient(conn)
+				srv.startNewClient(conn)
 			}
 		}
 	}()
 
-	t.wgStartG.Wait()
+	srv.wgStartG.Wait()
 
 	return nil
 }
 
 // CloseClient will close the client socket connection.
-func (t *Server) CloseClient(tcpAddr *net.TCPAddr) error {
-	c, err := t.clients.find(tcpAddr)
+func (srv *Server) CloseClient(tcpAddr *net.TCPAddr) error {
+	c, err := srv.clients.find(tcpAddr)
 	if err != nil {
 		return fmt.Errorf("IP[ %s ] : disconnected", tcpAddr.String())
 	}
@@ -186,48 +200,20 @@ func (t *Server) CloseClient(tcpAddr *net.TCPAddr) error {
 	return nil
 }
 
-// Send will deliver the response back to the client.
-func (t *Server) Send(ctx context.Context, r *Response) error {
-	c, err := t.clients.find(r.TCPAddr)
-	if err != nil {
-		return fmt.Errorf("IP[ %s ] : disconnected", r.TCPAddr.String())
-	}
-
-	return t.respHandler.Write(r, c.writer)
-}
-
-// SendAll will deliver the response back to all connected clients.
-func (t *Server) SendAll(ctx context.Context, r *Response) error {
-	clients := t.clients.copy()
-
-	var errors Errors
-	for _, c := range clients {
-		if err := t.respHandler.Write(r, c.writer); err != nil {
-			errors = append(errors, err)
-		}
-	}
-
-	if errors != nil {
-		return errors
-	}
-
-	return nil
-}
-
 // Addr returns the listener's network address. This may be different than the values
 // provided in the configuration, for example if configuration port value is 0.
-func (t *Server) Addr() net.Addr {
-	return t.tcpAddr
+func (srv *Server) Addr() net.Addr {
+	return srv.tcpAddr
 }
 
 // Clients returns the number of active clients connected.
-func (t *Server) Clients() int {
-	return t.clients.count()
+func (srv *Server) Clients() int {
+	return srv.clients.count()
 }
 
 // Groom drops connections that are not active for the specified duration.
-func (t *Server) Groom(d time.Duration) {
-	client := t.clients.copy()
+func (srv *Server) Groom(d time.Duration) {
+	client := srv.clients.copy()
 
 	now := time.Now().UTC()
 	for _, c := range client {
@@ -237,7 +223,7 @@ func (t *Server) Groom(d time.Duration) {
 			// This is a blocking call that waits for the socket goroutine
 			// to report its done. This parallel call should work well since
 			// there is no error handling needed.
-			t.log(EvtGroom, TypInfo, c.ipAddress, "Last[ %v ] Dur[ %v ]", c.lastAct.Format(time.RFC3339), sub)
+			srv.log(EvtGroom, TypInfo, c.ipAddress, "Last[ %v ] Dur[ %v ]", c.lastAct.Format(time.RFC3339), sub)
 			go c.close()
 		}
 	}
@@ -246,18 +232,18 @@ func (t *Server) Groom(d time.Duration) {
 // =============================================================================
 
 // startNewClient takes a new connection and adds it to the manager.
-func (t *Server) startNewClient(conn net.Conn) {
+func (srv *Server) startNewClient(conn net.Conn) {
 	tcpAddr := conn.RemoteAddr().(*net.TCPAddr)
 
-	if _, err := t.clients.find(tcpAddr); err == nil {
-		t.log(EvtJoin, TypError, tcpAddr.IP.String(), "already connected")
+	if _, err := srv.clients.find(tcpAddr); err == nil {
+		srv.log(EvtJoin, TypError, tcpAddr.IP.String(), "already connected")
 		conn.Close()
 		return
 	}
 
-	c := newClient(t, conn)
+	c := newClient(srv.log, srv.clients, srv.handlers, conn)
 
-	t.clients.add(c)
+	srv.clients.add(c)
 
 	c.start()
 }

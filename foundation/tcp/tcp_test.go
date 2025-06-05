@@ -18,12 +18,9 @@ func TestTCP(t *testing.T) {
 	{
 		// Create a configuration.
 		cfg := tcp.ServerConfig{
-			NetType: "tcp4",
-			Addr:    ":0",
-
-			ConnHandler: tcpConnHandler{},
-			ReqHandler:  tcpReqHandler{},
-			RespHandler: tcpRespHandler{},
+			NetType:  "tcp4",
+			Addr:     ":0",
+			Handlers: tcpHandlers{},
 		}
 
 		// Create a new TCP value.
@@ -92,12 +89,9 @@ func TestTCPAddr(t *testing.T) {
 	{
 		// Create a configuration.
 		cfg := tcp.ServerConfig{
-			NetType: "tcp4",
-			Addr:    ":0", // Defer port assignment to OS.
-
-			ConnHandler: tcpConnHandler{},
-			ReqHandler:  tcpReqHandler{},
-			RespHandler: tcpRespHandler{},
+			NetType:  "tcp4",
+			Addr:     ":0", // Defer port assignment to OS.
+			Handlers: tcpHandlers{},
 		}
 
 		// Create a new TCP value.

@@ -42,12 +42,10 @@ func run() error {
 	}
 
 	cfg := tcp.ServerConfig{
-		NetType:     "tcp4",
-		Addr:        "0.0.0.0:3001",
-		ConnHandler: tcpConnHandler{},
-		ReqHandler:  tcpReqHandler{},
-		RespHandler: tcpRespHandler{},
-		Logger:      f,
+		NetType:  "tcp4",
+		Addr:     "0.0.0.0:3001",
+		Handlers: tcpHandlers{},
+		Logger:   f,
 	}
 
 	// Create a new TCP value.
@@ -147,28 +145,26 @@ func tcpClient(cfg tcp.ServerConfig) error {
 // =============================================================================
 
 // tcpConnHandler is required to process data.
-type tcpConnHandler struct{}
+type tcpHandlers struct{}
 
 // Bind is called to init to reader and writer.
-func (tch tcpConnHandler) Bind(conn net.Conn) (io.Reader, io.Writer) {
+func (tcpHandlers) Bind(conn net.Conn) (io.Reader, io.Writer) {
 	return bufio.NewReader(conn), bufio.NewWriter(conn)
 }
-
-// tcpReqHandler is required to process client messages.
-type tcpReqHandler struct{}
 
 var bill atomic.Int64
 
 // Read implements the udp.ReqHandler interface. It is provided a request
 // value to popular and a io.Reader that was created in the Bind above.
-func (tcpReqHandler) Read(ipAddress string, reader io.Reader) ([]byte, int, error) {
+func (tcpHandlers) Read(ipAddress string, reader io.Reader) ([]byte, int, error) {
 	bufReader := reader.(*bufio.Reader)
 
 	fmt.Println("***> SERVER: WAITING ON READ")
 
-	if bill.CompareAndSwap(0, 1) {
-		time.Sleep(100 * time.Second)
-	}
+	// Force a delay to simulate a long read.
+	// if bill.CompareAndSwap(0, 1) {
+	// 	time.Sleep(100 * time.Second)
+	// }
 
 	// Read a small string to keep the code simple.
 	line, err := bufReader.ReadString('\n')
@@ -182,30 +178,20 @@ func (tcpReqHandler) Read(ipAddress string, reader io.Reader) ([]byte, int, erro
 }
 
 // Process is used to handle the processing of the message.
-func (tcpReqHandler) Process(r *tcp.Request) {
+func (tcpHandlers) Process(r *tcp.Request, writer io.Writer) {
 	fmt.Println("***> SERVER: CLIENT MESSAGE:", string(r.Data))
 
-	resp := tcp.Response{
-		TCPAddr: r.TCPAddr,
-		Data:    []byte("GOT IT\n"),
-		Length:  7,
-	}
+	resp := "GOT IT\n"
 
-	fmt.Println("***> SERVER: SEND:", string(resp.Data))
+	fmt.Println("***> SERVER: SEND:", resp)
 
-	r.TCP.Send(r.Context, &resp)
-}
-
-type tcpRespHandler struct{}
-
-// Write is provided the user-defined writer and the data to write.
-func (tcpRespHandler) Write(r *tcp.Response, writer io.Writer) error {
 	bufWriter := writer.(*bufio.Writer)
-	if _, err := bufWriter.WriteString(string(r.Data)); err != nil {
-		return err
+	if _, err := bufWriter.WriteString(resp); err != nil {
+		fmt.Println("***> SERVER: ERROR SENDING RESPONSE:", err)
+		return
 	}
 
-	return bufWriter.Flush()
+	bufWriter.Flush()
 }
 
 // =============================================================================
