@@ -85,8 +85,8 @@ func NewServer(name string, cfg ServerConfig) (*Server, error) {
 
 // Shutdown shuts down the manager and closes all connections.
 func (srv *Server) Shutdown(ctx context.Context) error {
-	srv.log(EvtStop, TypInfo, "", "started shutdown")
-	defer srv.log(EvtStop, TypInfo, "", "completed shutdown")
+	srv.log(EvtStop, TypInfo, "", "server started shutdown")
+	defer srv.log(EvtStop, TypInfo, "", "server completed shutdown")
 
 	srv.shuttingDown.Store(true)
 
@@ -105,7 +105,7 @@ func (srv *Server) Shutdown(ctx context.Context) error {
 	<-ctx.Done()
 
 	if errors.Is(ctx.Err(), context.DeadlineExceeded) {
-		srv.log(EvtStop, TypInfo, "", "deadline exceeded")
+		srv.log(EvtStop, TypInfo, "", "server deadline exceeded")
 		return ctx.Err()
 	}
 

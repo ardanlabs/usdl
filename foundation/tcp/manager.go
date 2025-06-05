@@ -52,16 +52,16 @@ func NewClientManager(cfg ClientConfig) (*ClientManager, error) {
 }
 
 // Shutdown shuts down the manager and closes all connections.
-func (cln *ClientManager) Shutdown(ctx context.Context) error {
-	cln.log(EvtStop, TypInfo, "", "started shutdown")
-	defer cln.log(EvtStop, TypInfo, "", "completed shutdown")
+func (cm *ClientManager) Shutdown(ctx context.Context) error {
+	cm.log(EvtStop, TypInfo, "", "client manager started shutdown")
+	defer cm.log(EvtStop, TypInfo, "", "client manager completed shutdown")
 
 	ctx, cancel := context.WithCancel(ctx)
 
 	go func() {
 		defer cancel()
 
-		for _, c := range cln.clients.copy() {
+		for _, c := range cm.clients.copy() {
 			go c.close()
 		}
 	}()
@@ -69,7 +69,7 @@ func (cln *ClientManager) Shutdown(ctx context.Context) error {
 	<-ctx.Done()
 
 	if errors.Is(ctx.Err(), context.DeadlineExceeded) {
-		cln.log(EvtStop, TypInfo, "", "deadline exceeded")
+		cm.log(EvtStop, TypInfo, "", "client manager deadline exceeded")
 		return ctx.Err()
 	}
 
@@ -77,34 +77,39 @@ func (cln *ClientManager) Shutdown(ctx context.Context) error {
 }
 
 // Dial establishes a new TCP connection to the specified address.
-func (cln *ClientManager) Dial(network string, address string) error {
+func (cm *ClientManager) Dial(network string, address string) (*Client, error) {
 	conn, err := net.Dial(network, address)
 	if err != nil {
-		return fmt.Errorf("dial: %w", err)
+		return nil, fmt.Errorf("dial: %w", err)
 	}
 
 	// Add this new connection to the manager map and
 	// start the client goroutine.
-	cln.startNewClient(conn)
+	clt, err := cm.startNewClient(conn)
+	if err != nil {
+		return nil, fmt.Errorf("startNewClient: %w", err)
+	}
 
-	return nil
+	return clt, nil
 }
 
 // =============================================================================
 
 // startNewClient takes a new connection and adds it to the manager.
-func (cln *ClientManager) startNewClient(conn net.Conn) {
-	tcpAddr := conn.RemoteAddr().(*net.TCPAddr)
+func (cm *ClientManager) startNewClient(conn net.Conn) (*Client, error) {
+	tcpAddr := conn.LocalAddr().(*net.TCPAddr)
 
-	if _, err := cln.clients.find(tcpAddr); err == nil {
-		cln.log(EvtJoin, TypError, tcpAddr.IP.String(), "already connected")
+	if _, err := cm.clients.find(tcpAddr); err == nil {
+		cm.log(EvtJoin, TypError, tcpAddr.IP.String(), "already connected")
 		conn.Close()
-		return
+		return nil, errors.New("client already connected")
 	}
 
-	c := newClient(cln.log, cln.clients, cln.handlers, conn)
+	clt := newClient(cm.log, cm.clients, cm.handlers, conn)
 
-	cln.clients.add(c)
+	cm.clients.add(clt)
 
-	c.start()
+	clt.start()
+
+	return clt, nil
 }

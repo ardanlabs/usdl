@@ -11,7 +11,6 @@ import (
 	"fmt"
 	"io"
 	"log"
-	"net"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -37,15 +36,15 @@ func run() error {
 	// -------------------------------------------------------------------------
 	// SERVER SIDE
 
-	f := func(evt string, typ string, ipAddress string, format string, a ...any) {
+	logger := func(evt string, typ string, ipAddress string, format string, a ...any) {
 		log.Printf("EVENT: %s, %s, %s, %s", evt, typ, ipAddress, fmt.Sprintf(format, a...))
 	}
 
 	cfg := tcp.ServerConfig{
 		NetType:  "tcp4",
 		Addr:     "0.0.0.0:3001",
-		Handlers: tcpHandlers{},
-		Logger:   f,
+		Handlers: tcpSrvHandlers{},
+		Logger:   logger,
 	}
 
 	// Create a new TCP value.
@@ -61,9 +60,12 @@ func run() error {
 		serverErrors <- server.Listen()
 	}()
 
+	// -------------------------------------------------------------------------
+	// CLIENT SIDE
+
 	go func() {
 		fmt.Println("***> START CLIENT TEST")
-		tcpClient(cfg)
+		tcpClient(logger)
 	}()
 
 	// -------------------------------------------------------------------------
@@ -91,72 +93,62 @@ func run() error {
 	return nil
 }
 
-func tcpClient(cfg tcp.ServerConfig) error {
+var cltWG sync.WaitGroup
+
+func tcpClient(logger tcp.Logger) error {
+	const netType = "tcp4"
+	const addr = "0.0.0.0:3001"
+
+	cfg := tcp.ClientConfig{
+		Handlers: tcpCltHandlers{},
+		Logger:   logger,
+	}
+
+	cm, err := tcp.NewClientManager(cfg)
+	if err != nil {
+		return fmt.Errorf("creating new TCP client manager: %w", err)
+	}
+	defer cm.Shutdown(context.Background())
+
+	cltWG.Add(2)
+
 	for i := range 2 {
 		go func() {
-			var conn net.Conn
-
 			fmt.Println(i, "***> Waiting for server to start...")
 			time.Sleep(300 * time.Millisecond)
 
-			fmt.Println("***> Try Client Conenction:", i+1)
-			if i == 9 {
-				fmt.Println(i, "unable to connect to server after 10 attempts")
-				return
-			}
-
-			var err error
-			conn, err = net.Dial(cfg.NetType, cfg.Addr)
+			clt, err := cm.Dial(netType, addr)
 			if err != nil {
 				fmt.Println(i, "dialing a new TCP connection: %w", err)
 				return
 			}
-			defer conn.Close()
-
-			if conn == nil {
-				fmt.Println(i, "connection is nil, unable to connect to server")
-				return
-			}
-
-			bufReader := bufio.NewReader(conn)
-			bufWriter := bufio.NewWriter(conn)
 
 			fmt.Print("***> CLIENT: SEND:", "Hello\n")
 
-			if _, err := bufWriter.WriteString("Hello\n"); err != nil {
+			if _, err := clt.Writer.Write([]byte("Hello\n")); err != nil {
 				fmt.Println(i, "sending data to the connection: %w", err)
 				return
 			}
-			bufWriter.Flush()
-
-			response, err := bufReader.ReadString('\n')
-			if err != nil {
-				fmt.Println(i, "reading response from the connection: %w", err)
-				return
-			}
-
-			fmt.Println(i, "***> CLIENT: RECV:", response)
 		}()
 	}
+
+	cltWG.Wait()
 
 	return nil
 }
 
 // =============================================================================
 
-// tcpConnHandler is required to process data.
-type tcpHandlers struct{}
+type tcpSrvHandlers struct{}
 
-// Bind is called to init to reader and writer.
-func (tcpHandlers) Bind(clt *tcp.Client) {
+func (tcpSrvHandlers) Bind(clt *tcp.Client) {
+	fmt.Println("***> SERVER: BIND", clt.Conn.RemoteAddr().String(), clt.Conn.LocalAddr().String())
 	clt.Reader = bufio.NewReader(clt.Conn)
 }
 
 var bill atomic.Int64
 
-// Read implements the udp.ReqHandler interface. It is provided a request
-// value to popular and a io.Reader that was created in the Bind above.
-func (tcpHandlers) Read(clt *tcp.Client) ([]byte, int, error) {
+func (tcpSrvHandlers) Read(clt *tcp.Client) ([]byte, int, error) {
 	bufReader := clt.Reader.(*bufio.Reader)
 
 	fmt.Println("***> SERVER: WAITING ON READ")
@@ -177,8 +169,7 @@ func (tcpHandlers) Read(clt *tcp.Client) ([]byte, int, error) {
 	return []byte(line), len(line), nil
 }
 
-// Process is used to handle the processing of the message.
-func (tcpHandlers) Process(r *tcp.Request, clt *tcp.Client) {
+func (tcpSrvHandlers) Process(r *tcp.Request, clt *tcp.Client) {
 	fmt.Println("***> SERVER: CLIENT MESSAGE:", string(r.Data))
 
 	resp := "GOT IT\n"
@@ -189,6 +180,37 @@ func (tcpHandlers) Process(r *tcp.Request, clt *tcp.Client) {
 		fmt.Println("***> SERVER: ERROR SENDING RESPONSE:", err)
 		return
 	}
+}
+
+// =============================================================================
+
+type tcpCltHandlers struct{}
+
+func (tcpCltHandlers) Bind(clt *tcp.Client) {
+	fmt.Println("***> CLIENT: BIND", clt.Conn.RemoteAddr().String(), clt.Conn.LocalAddr().String())
+	clt.Reader = bufio.NewReader(clt.Conn)
+}
+
+func (tcpCltHandlers) Read(clt *tcp.Client) ([]byte, int, error) {
+	bufReader := clt.Reader.(*bufio.Reader)
+
+	fmt.Println("***> CLIENT: WAITING ON READ")
+
+	// Read a small string to keep the code simple.
+	line, err := bufReader.ReadString('\n')
+	if err != nil {
+		return nil, 0, err
+	}
+
+	fmt.Println("***> CLIENT: MESSAGE READ")
+
+	return []byte(line), len(line), nil
+}
+
+func (tcpCltHandlers) Process(r *tcp.Request, clt *tcp.Client) {
+	fmt.Println("***> CLIENT: SERVER MESSAGE:", string(r.Data))
+
+	cltWG.Done()
 }
 
 // =============================================================================
