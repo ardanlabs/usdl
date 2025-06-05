@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"errors"
-	"io"
 	"net"
 	"time"
 )
@@ -99,7 +98,7 @@ type Handlers interface {
 type ConnHandler interface {
 
 	// Bind is called to set the reader and writer.
-	Bind(conn net.Conn) (io.Reader, io.Writer)
+	Bind(clt *Client)
 }
 
 // ReqHandler is implemented by the user to implement the processing
@@ -114,8 +113,8 @@ type ReqHandler interface {
 	// Read is provided an ipaddress and the user-defined reader and must return
 	// the data read off the wire and the length. Returning io.EOF or a non
 	// temporary error will show down the listener.
-	Read(ipAddress string, r io.Reader) ([]byte, int, error)
+	Read(clt *Client) ([]byte, int, error)
 
 	// Process is used to handle the processing of the request.
-	Process(r *Request, w io.Writer)
+	Process(r *Request, clt *Client)
 }

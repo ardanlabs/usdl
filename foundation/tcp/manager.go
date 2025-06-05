@@ -2,6 +2,7 @@ package tcp
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net"
 )
@@ -67,8 +68,8 @@ func (cln *ClientManager) Shutdown(ctx context.Context) error {
 
 	<-ctx.Done()
 
-	if ctx.Err() != nil {
-		cln.log(EvtStop, TypInfo, "", "cancelled shutdown")
+	if errors.Is(ctx.Err(), context.DeadlineExceeded) {
+		cln.log(EvtStop, TypInfo, "", "deadline exceeded")
 		return ctx.Err()
 	}
 

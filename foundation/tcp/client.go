@@ -9,17 +9,17 @@ import (
 	"time"
 )
 
-// client represents a single networked connection.
-type client struct {
+// Client represents a single networked connection.
+type Client struct {
+	Conn      net.Conn
+	Reader    io.Reader
+	Writer    io.Writer
 	log       internalLogger
+	tcpAddr   *net.TCPAddr
 	clients   *clients
 	handlers  Handlers
-	conn      net.Conn
-	tcpAddr   *net.TCPAddr
 	ipAddress string
 	isIPv6    bool
-	reader    io.Reader
-	writer    io.Writer
 	wg        sync.WaitGroup
 	timeConn  time.Time
 	lastAct   time.Time
@@ -28,60 +28,60 @@ type client struct {
 }
 
 // newClient creates a new client for an incoming connection.
-func newClient(log internalLogger, clients *clients, handlers Handlers, conn net.Conn) *client {
+func newClient(log internalLogger, clients *clients, handlers Handlers, conn net.Conn) *Client {
 	now := time.Now().UTC()
-
-	// Ask the user to bind the reader and writer they want to
-	// use for this connection.
-	r, w := handlers.Bind(conn)
 
 	// This will be a TCPAddr 100% of the time.
 	raddr := conn.RemoteAddr().(*net.TCPAddr)
 
-	c := client{
+	clt := Client{
+		Conn:      conn,
+		Reader:    conn,
+		Writer:    conn,
 		log:       log,
+		tcpAddr:   raddr,
 		clients:   clients,
 		handlers:  handlers,
-		conn:      conn,
-		tcpAddr:   raddr,
 		ipAddress: raddr.IP.String() + ":" + strconv.Itoa(raddr.Port),
 		isIPv6:    raddr.IP.To4() == nil,
-		reader:    r,
-		writer:    w,
 		timeConn:  now,
 		lastAct:   now,
 	}
 
-	return &c
+	// Inform the user we have a socket connection for a
+	// new client.
+	handlers.Bind(&clt)
+
+	return &clt
 }
 
-func (c *client) start() {
-	c.wg.Add(1)
-	go c.read()
+func (clt *Client) start() {
+	clt.wg.Add(1)
+	go clt.read()
 }
 
-func (c *client) close() {
-	c.conn.Close()
-	c.wg.Wait()
+func (clt *Client) close() {
+	clt.Conn.Close()
+	clt.wg.Wait()
 
-	c.log(EvtDrop, TypInfo, c.ipAddress, "connection closed")
+	clt.log(EvtDrop, TypInfo, clt.ipAddress, "connection closed")
 }
 
-func (c *client) read() {
-	c.log(EvtRead, TypInfo, c.ipAddress, "client G started")
+func (clt *Client) read() {
+	clt.log(EvtRead, TypInfo, clt.ipAddress, "client G started")
 
 	defer func() {
-		c.log(EvtDrop, TypInfo, c.ipAddress, "client G disconnected")
-		c.clients.close(c.conn)
-		c.wg.Done()
+		clt.log(EvtDrop, TypInfo, clt.ipAddress, "client G disconnected")
+		clt.clients.close(clt.Conn)
+		clt.wg.Done()
 	}()
 
 close:
 	for {
 		// Wait for a message to arrive.
-		data, length, err := c.handlers.Read(c.ipAddress, c.reader)
-		c.lastAct = time.Now().UTC()
-		c.nReads++
+		data, length, err := clt.handlers.Read(clt)
+		clt.lastAct = time.Now().UTC()
+		clt.nReads++
 
 		if err != nil {
 			// temporary is declared to test for the existence of
@@ -106,12 +106,12 @@ close:
 		// Create the request.
 		r := Request{
 			TCPAddr: &net.TCPAddr{
-				IP:   c.tcpAddr.IP,
-				Port: c.tcpAddr.Port,
-				Zone: c.tcpAddr.Zone,
+				IP:   clt.tcpAddr.IP,
+				Port: clt.tcpAddr.Port,
+				Zone: clt.tcpAddr.Zone,
 			},
-			IsIPv6:  c.isIPv6,
-			ReadAt:  c.lastAct,
+			IsIPv6:  clt.isIPv6,
+			ReadAt:  clt.lastAct,
 			Context: context.Background(),
 			Data:    data,
 			Length:  length,
@@ -119,6 +119,6 @@ close:
 
 		// Process the request on this goroutine that is
 		// handling the socket connection.
-		c.handlers.Process(&r, c.writer)
+		clt.handlers.Process(&r, clt)
 	}
 }

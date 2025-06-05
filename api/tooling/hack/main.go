@@ -148,16 +148,16 @@ func tcpClient(cfg tcp.ServerConfig) error {
 type tcpHandlers struct{}
 
 // Bind is called to init to reader and writer.
-func (tcpHandlers) Bind(conn net.Conn) (io.Reader, io.Writer) {
-	return bufio.NewReader(conn), bufio.NewWriter(conn)
+func (tcpHandlers) Bind(clt *tcp.Client) {
+	clt.Reader = bufio.NewReader(clt.Conn)
 }
 
 var bill atomic.Int64
 
 // Read implements the udp.ReqHandler interface. It is provided a request
 // value to popular and a io.Reader that was created in the Bind above.
-func (tcpHandlers) Read(ipAddress string, reader io.Reader) ([]byte, int, error) {
-	bufReader := reader.(*bufio.Reader)
+func (tcpHandlers) Read(clt *tcp.Client) ([]byte, int, error) {
+	bufReader := clt.Reader.(*bufio.Reader)
 
 	fmt.Println("***> SERVER: WAITING ON READ")
 
@@ -178,20 +178,17 @@ func (tcpHandlers) Read(ipAddress string, reader io.Reader) ([]byte, int, error)
 }
 
 // Process is used to handle the processing of the message.
-func (tcpHandlers) Process(r *tcp.Request, writer io.Writer) {
+func (tcpHandlers) Process(r *tcp.Request, clt *tcp.Client) {
 	fmt.Println("***> SERVER: CLIENT MESSAGE:", string(r.Data))
 
 	resp := "GOT IT\n"
 
 	fmt.Println("***> SERVER: SEND:", resp)
 
-	bufWriter := writer.(*bufio.Writer)
-	if _, err := bufWriter.WriteString(resp); err != nil {
+	if _, err := clt.Writer.Write([]byte(resp)); err != nil {
 		fmt.Println("***> SERVER: ERROR SENDING RESPONSE:", err)
 		return
 	}
-
-	bufWriter.Flush()
 }
 
 // =============================================================================
