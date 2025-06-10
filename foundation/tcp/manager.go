@@ -5,6 +5,8 @@ import (
 	"errors"
 	"fmt"
 	"net"
+
+	"github.com/google/uuid"
 )
 
 // ClientConfig provides a data structure of required configuration parameters.
@@ -28,6 +30,7 @@ func (cfg ClientConfig) validate() error {
 // ClientManager manages a collection of TCP client connections.
 type ClientManager struct {
 	log      internalLogger
+	traceID  string
 	handlers Handlers
 	clients  *clients
 }
@@ -38,12 +41,13 @@ func NewClientManager(cfg ClientConfig) (*ClientManager, error) {
 		return nil, err
 	}
 
-	l := func(evt int, typ int, ipAddress string, format string, a ...any) {
-		cfg.Logger(eventTypes[evt], eventSubTypes[typ], ipAddress, fmt.Sprintf(format, a...))
+	l := func(evt int, typ int, ipAddress string, traceID string, format string, a ...any) {
+		cfg.Logger(eventTypes[evt], eventSubTypes[typ], ipAddress, traceID, fmt.Sprintf(format, a...))
 	}
 
 	cm := ClientManager{
 		log:      l,
+		traceID:  uuid.New().String(),
 		handlers: cfg.Handlers,
 		clients:  newClients(l),
 	}
@@ -53,8 +57,8 @@ func NewClientManager(cfg ClientConfig) (*ClientManager, error) {
 
 // Shutdown shuts down the manager and closes all connections.
 func (cm *ClientManager) Shutdown(ctx context.Context) error {
-	cm.log(EvtStop, TypInfo, "", "client manager started shutdown")
-	defer cm.log(EvtStop, TypInfo, "", "client manager completed shutdown")
+	cm.log(EvtStop, TypInfo, "", cm.traceID, "client manager started shutdown")
+	defer cm.log(EvtStop, TypInfo, "", cm.traceID, "client manager completed shutdown")
 
 	ctx, cancel := context.WithCancel(ctx)
 
@@ -69,7 +73,7 @@ func (cm *ClientManager) Shutdown(ctx context.Context) error {
 	<-ctx.Done()
 
 	if errors.Is(ctx.Err(), context.DeadlineExceeded) {
-		cm.log(EvtStop, TypInfo, "", "client manager deadline exceeded")
+		cm.log(EvtStop, TypInfo, "", cm.traceID, "client manager deadline exceeded")
 		return ctx.Err()
 	}
 
@@ -100,7 +104,7 @@ func (cm *ClientManager) startNewClient(conn net.Conn) (*Client, error) {
 	tcpAddr := conn.LocalAddr().(*net.TCPAddr)
 
 	if _, err := cm.clients.find(tcpAddr); err == nil {
-		cm.log(EvtJoin, TypError, tcpAddr.IP.String(), "already connected")
+		cm.log(EvtJoin, TypError, tcpAddr.IP.String(), cm.traceID, "already connected")
 		conn.Close()
 		return nil, errors.New("client already connected")
 	}

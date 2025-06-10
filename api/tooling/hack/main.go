@@ -36,8 +36,8 @@ func run() error {
 	// -------------------------------------------------------------------------
 	// SERVER SIDE
 
-	logger := func(evt string, typ string, ipAddress string, format string, a ...any) {
-		log.Printf("EVENT: %s, %s, %s, %s", evt, typ, ipAddress, fmt.Sprintf(format, a...))
+	logger := func(evt string, typ string, ipAddress string, traceID string, format string, a ...any) {
+		log.Printf("EVENT: %s, %s, %s, %s, %s", evt, typ, ipAddress, traceID, fmt.Sprintf(format, a...))
 	}
 
 	cfg := tcp.ServerConfig{
@@ -139,19 +139,23 @@ func tcpClient(logger tcp.Logger) error {
 
 // =============================================================================
 
+type keyType int
+
+var keyValue keyType = 0
+
 type tcpSrvHandlers struct{}
 
-func (tcpSrvHandlers) Bind(clt *tcp.Client) {
-	fmt.Println("***> SERVER: BIND", clt.Conn.RemoteAddr().String(), clt.Conn.LocalAddr().String())
+func (tcpSrvHandlers) Bind(ctx context.Context, clt *tcp.Client) {
+	fmt.Println("***> SERVER: BIND", "TRACEDID", clt.TraceID(), clt.Conn.RemoteAddr().String(), clt.Conn.LocalAddr().String())
 	clt.Reader = bufio.NewReader(clt.Conn)
 }
 
 var bill atomic.Int64
 
-func (tcpSrvHandlers) Read(clt *tcp.Client) ([]byte, int, error) {
+func (tcpSrvHandlers) Read(ctx context.Context, clt *tcp.Client) ([]byte, int, error) {
 	bufReader := clt.Reader.(*bufio.Reader)
 
-	fmt.Println("***> SERVER: WAITING ON READ")
+	fmt.Println("***> SERVER: WAITING ON READ", "TRACEDID", clt.TraceID())
 
 	// Force a delay to simulate a long read.
 	// if bill.CompareAndSwap(0, 1) {
@@ -164,17 +168,17 @@ func (tcpSrvHandlers) Read(clt *tcp.Client) ([]byte, int, error) {
 		return nil, 0, err
 	}
 
-	fmt.Println("***> SERVER: MESSAGE READ")
+	fmt.Println("***> SERVER: MESSAGE READ", "TRACEDID", clt.TraceID())
 
 	return []byte(line), len(line), nil
 }
 
-func (tcpSrvHandlers) Process(r *tcp.Request, clt *tcp.Client) {
-	fmt.Println("***> SERVER: CLIENT MESSAGE:", string(r.Data))
+func (tcpSrvHandlers) Process(ctx context.Context, r *tcp.Request, clt *tcp.Client) {
+	fmt.Println("***> SERVER: CLIENT MESSAGE:", "TRACEDID", clt.TraceID(), string(r.Data))
 
 	resp := "GOT IT\n"
 
-	fmt.Println("***> SERVER: SEND:", resp)
+	fmt.Println("***> SERVER: SEND:", "TRACEDID", clt.TraceID(), resp)
 
 	if _, err := clt.Writer.Write([]byte(resp)); err != nil {
 		fmt.Println("***> SERVER: ERROR SENDING RESPONSE:", err)
@@ -186,12 +190,12 @@ func (tcpSrvHandlers) Process(r *tcp.Request, clt *tcp.Client) {
 
 type tcpCltHandlers struct{}
 
-func (tcpCltHandlers) Bind(clt *tcp.Client) {
+func (tcpCltHandlers) Bind(ctx context.Context, clt *tcp.Client) {
 	fmt.Println("***> CLIENT: BIND", clt.Conn.RemoteAddr().String(), clt.Conn.LocalAddr().String())
 	clt.Reader = bufio.NewReader(clt.Conn)
 }
 
-func (tcpCltHandlers) Read(clt *tcp.Client) ([]byte, int, error) {
+func (tcpCltHandlers) Read(ctx context.Context, clt *tcp.Client) ([]byte, int, error) {
 	bufReader := clt.Reader.(*bufio.Reader)
 
 	fmt.Println("***> CLIENT: WAITING ON READ")
@@ -207,7 +211,7 @@ func (tcpCltHandlers) Read(clt *tcp.Client) ([]byte, int, error) {
 	return []byte(line), len(line), nil
 }
 
-func (tcpCltHandlers) Process(r *tcp.Request, clt *tcp.Client) {
+func (tcpCltHandlers) Process(ctx context.Context, r *tcp.Request, clt *tcp.Client) {
 	fmt.Println("***> CLIENT: SERVER MESSAGE:", string(r.Data))
 
 	cltWG.Done()

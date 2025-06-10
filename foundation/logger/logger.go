@@ -97,7 +97,10 @@ func (log *Logger) write(ctx context.Context, level Level, caller int, msg strin
 	r := slog.NewRecord(time.Now(), slogLevel, msg, pcs[0])
 
 	if log.traceIDFn != nil {
-		args = append(args, "trace_id", log.traceIDFn(ctx))
+		traceID := log.traceIDFn(ctx)
+		if traceID != "" {
+			args = append(args, "trace_id", traceID)
+		}
 	}
 	r.Add(args...)
 

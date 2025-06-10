@@ -9,6 +9,8 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"github.com/google/uuid"
 )
 
 // ServerConfig provides a data structure of required configuration parameters.
@@ -39,6 +41,7 @@ func (cfg ServerConfig) validate() error {
 type Server struct {
 	name                   string
 	log                    internalLogger
+	traceID                string
 	netType                string
 	addr                   string
 	handlers               Handlers
@@ -63,13 +66,14 @@ func NewServer(name string, cfg ServerConfig) (*Server, error) {
 		return nil, err
 	}
 
-	l := func(evt int, typ int, ipAddress string, format string, a ...any) {
-		cfg.Logger(eventTypes[evt], eventSubTypes[typ], ipAddress, fmt.Sprintf(format, a...))
+	l := func(evt int, typ int, ipAddress string, traceID string, format string, a ...any) {
+		cfg.Logger(eventTypes[evt], eventSubTypes[typ], ipAddress, traceID, fmt.Sprintf(format, a...))
 	}
 
 	t := Server{
 		name:      name,
 		log:       l,
+		traceID:   uuid.New().String(),
 		netType:   cfg.NetType,
 		addr:      cfg.Addr,
 		handlers:  cfg.Handlers,
@@ -85,8 +89,8 @@ func NewServer(name string, cfg ServerConfig) (*Server, error) {
 
 // Shutdown shuts down the manager and closes all connections.
 func (srv *Server) Shutdown(ctx context.Context) error {
-	srv.log(EvtStop, TypInfo, "", "server started shutdown")
-	defer srv.log(EvtStop, TypInfo, "", "server completed shutdown")
+	srv.log(EvtStop, TypInfo, "", srv.traceID, "server started shutdown")
+	defer srv.log(EvtStop, TypInfo, "", srv.traceID, "server completed shutdown")
 
 	srv.shuttingDown.Store(true)
 
@@ -105,7 +109,7 @@ func (srv *Server) Shutdown(ctx context.Context) error {
 	<-ctx.Done()
 
 	if errors.Is(ctx.Err(), context.DeadlineExceeded) {
-		srv.log(EvtStop, TypInfo, "", "server deadline exceeded")
+		srv.log(EvtStop, TypInfo, "", srv.traceID, "server deadline exceeded")
 		return ctx.Err()
 	}
 
@@ -129,14 +133,14 @@ func (srv *Server) Listen() error {
 
 	go func() {
 		defer func() {
-			srv.log(EvtAccept, TypInfo, net.JoinHostPort(srv.ipAddress, strconv.Itoa(srv.port)), "completed listener shutdown")
+			srv.log(EvtAccept, TypInfo, net.JoinHostPort(srv.ipAddress, strconv.Itoa(srv.port)), srv.traceID, "completed listener shutdown")
 			srv.wgStartG.Done()
 		}()
 
 	startlistener:
 		for {
 			if srv.shuttingDown.Load() {
-				srv.log(EvtAccept, TypInfo, net.JoinHostPort(srv.ipAddress, strconv.Itoa(srv.port)), "started listener shutdown")
+				srv.log(EvtAccept, TypInfo, net.JoinHostPort(srv.ipAddress, strconv.Itoa(srv.port)), srv.traceID, "started listener shutdown")
 				srv.listener.reset()
 				break
 			}
@@ -144,23 +148,23 @@ func (srv *Server) Listen() error {
 			listener, err := srv.listener.start(srv.netType, srv.tcpAddr)
 			if err != nil {
 				// TODO: Use Context to control the retry / cancel.
-				srv.log(EvtAccept, TypError, "", err.Error())
+				srv.log(EvtAccept, TypError, "", srv.traceID, err.Error())
 				time.Sleep(200 * time.Millisecond)
 				continue
 			}
 
-			srv.log(EvtAccept, TypInfo, net.JoinHostPort(srv.ipAddress, strconv.Itoa(srv.port)), "waiting")
-
 			for {
+				srv.log(EvtAccept, TypInfo, net.JoinHostPort(srv.ipAddress, strconv.Itoa(srv.port)), srv.traceID, "waiting")
+
 				conn, err := listener.Accept()
 				if err != nil {
 					if srv.shuttingDown.Load() {
-						srv.log(EvtAccept, TypInfo, net.JoinHostPort(srv.ipAddress, strconv.Itoa(srv.port)), "started listener shutdown")
+						srv.log(EvtAccept, TypInfo, net.JoinHostPort(srv.ipAddress, strconv.Itoa(srv.port)), srv.traceID, "started listener shutdown")
 						srv.listener.reset()
 						break startlistener
 					}
 
-					srv.log(EvtAccept, TypError, conn.RemoteAddr().String(), err.Error())
+					srv.log(EvtAccept, TypError, conn.RemoteAddr().String(), srv.traceID, err.Error())
 
 					type temporary interface {
 						Temporary() bool
@@ -236,7 +240,7 @@ func (srv *Server) startNewClient(conn net.Conn) {
 	tcpAddr := conn.RemoteAddr().(*net.TCPAddr)
 
 	if _, err := srv.clients.find(tcpAddr); err == nil {
-		srv.log(EvtJoin, TypError, tcpAddr.IP.String(), "already connected")
+		srv.log(EvtJoin, TypError, tcpAddr.IP.String(), srv.traceID, "already connected")
 		conn.Close()
 		return
 	}

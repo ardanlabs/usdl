@@ -1,6 +1,7 @@
 package tcp
 
 import (
+	"errors"
 	"fmt"
 	"maps"
 	"net"
@@ -44,20 +45,21 @@ func (clt *clients) add(client *Client) {
 	clt.clients[client.ipAddress] = client
 }
 
-func (clt *clients) close(conn net.Conn) {
+func (clt *clients) close(conn net.Conn) error {
 	clt.clientsMu.Lock()
 	defer clt.clientsMu.Unlock()
 
 	ipAddress := conn.RemoteAddr().String()
 
 	if _, exists := clt.clients[ipAddress]; !exists {
-		clt.log(EvtRemove, TypError, ipAddress, "already removed")
-		return
+		return errors.New("already removed")
 	}
 
 	delete(clt.clients, ipAddress)
 
 	conn.Close()
+
+	return nil
 }
 
 func (clt *clients) find(tcpAddr *net.TCPAddr) (*Client, error) {

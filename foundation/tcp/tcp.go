@@ -51,10 +51,10 @@ var (
 
 // =============================================================================
 
-type internalLogger func(evt int, typ int, ipAddress string, format string, a ...any)
+type internalLogger func(evt int, typ int, ipAddress string, traceID string, format string, a ...any)
 
 // Logger defines an handler used to help log events.
-type Logger func(evt string, typ string, ipAddress string, format string, a ...any)
+type Logger func(evt string, typ string, ipAddress string, traceID string, format string, a ...any)
 
 // =============================================================================
 
@@ -98,7 +98,7 @@ type Handlers interface {
 type ConnHandler interface {
 
 	// Bind is called to set the reader and writer.
-	Bind(clt *Client)
+	Bind(ctx context.Context, clt *Client)
 }
 
 // ReqHandler is implemented by the user to implement the processing
@@ -113,8 +113,8 @@ type ReqHandler interface {
 	// Read is provided an ipaddress and the user-defined reader and must return
 	// the data read off the wire and the length. Returning io.EOF or a non
 	// temporary error will show down the listener.
-	Read(clt *Client) ([]byte, int, error)
+	Read(ctx context.Context, clt *Client) ([]byte, int, error)
 
 	// Process is used to handle the processing of the request.
-	Process(r *Request, clt *Client)
+	Process(ctx context.Context, r *Request, clt *Client)
 }
