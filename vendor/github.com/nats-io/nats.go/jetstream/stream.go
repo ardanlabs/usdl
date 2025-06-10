@@ -1,4 +1,4 @@
-// Copyright 2022-2024 The NATS Authors
+// Copyright 2022-2025 The NATS Authors
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -101,6 +101,12 @@ type (
 		// If consumer does not exist, ErrConsumerNotFound is returned.
 		DeleteConsumer(ctx context.Context, consumer string) error
 
+		// PauseConsumer pauses a consumer.
+		PauseConsumer(ctx context.Context, consumer string, pauseUntil time.Time) (*ConsumerPauseResponse, error)
+
+		// ResumeConsumer resumes a consumer.
+		ResumeConsumer(ctx context.Context, consumer string) (*ConsumerPauseResponse, error)
+
 		// ListConsumers returns ConsumerInfoLister enabling iterating over a
 		// channel of consumer infos.
 		ListConsumers(context.Context) ConsumerInfoLister
@@ -108,6 +114,10 @@ type (
 		// ConsumerNames returns a ConsumerNameLister enabling iterating over a
 		// channel of consumer names.
 		ConsumerNames(context.Context) ConsumerNameLister
+
+		// UnpinConsumer unpins the currently pinned client for a consumer for the given group name.
+		// If consumer does not exist, ErrConsumerNotFound is returned.
+		UnpinConsumer(ctx context.Context, consumer string, group string) error
 	}
 
 	RawStreamMsg struct {
@@ -161,6 +171,24 @@ type (
 	consumerDeleteResponse struct {
 		apiResponse
 		Success bool `json:"success,omitempty"`
+	}
+
+	consumerPauseRequest struct {
+		PauseUntil *time.Time `json:"pause_until,omitempty"`
+	}
+
+	ConsumerPauseResponse struct {
+		// Paused is true if the consumer is paused.
+		Paused bool `json:"paused"`
+		// PauseUntil is the time until the consumer is paused.
+		PauseUntil time.Time `json:"pause_until"`
+		// PauseRemaining is the time remaining until the consumer is paused.
+		PauseRemaining time.Duration `json:"pause_remaining,omitempty"`
+	}
+
+	consumerPauseApiResponse struct {
+		apiResponse
+		ConsumerPauseResponse
 	}
 
 	// GetMsgOpt is a function setting options for [Stream.GetMsg]
@@ -234,6 +262,10 @@ type (
 		apiPaged
 		Consumers []string `json:"consumers"`
 	}
+
+	consumerUnpinRequest struct {
+		Group string `json:"group"`
+	}
 )
 
 // CreateOrUpdateConsumer creates a consumer on a given stream with
@@ -294,6 +326,16 @@ func (s *stream) Consumer(ctx context.Context, name string) (Consumer, error) {
 // If consumer does not exist, ErrConsumerNotFound is returned.
 func (s *stream) DeleteConsumer(ctx context.Context, name string) error {
 	return deleteConsumer(ctx, s.js, s.name, name)
+}
+
+// PauseConsumer pauses a consumer.
+func (s *stream) PauseConsumer(ctx context.Context, name string, pauseUntil time.Time) (*ConsumerPauseResponse, error) {
+	return pauseConsumer(ctx, s.js, s.name, name, &pauseUntil)
+}
+
+// ResumeConsumer resumes a consumer.
+func (s *stream) ResumeConsumer(ctx context.Context, name string) (*ConsumerPauseResponse, error) {
+	return resumeConsumer(ctx, s.js, s.name, name)
 }
 
 // Info returns StreamInfo from the server.
@@ -569,7 +611,7 @@ func (s *stream) deleteMsg(ctx context.Context, req *msgDeleteRequest) error {
 		return err
 	}
 	if !resp.Success {
-		return fmt.Errorf("%w: %s", ErrMsgDeleteUnsuccessful, err)
+		return fmt.Errorf("%w: %s", ErrMsgDeleteUnsuccessful, resp.Error.Error())
 	}
 	return nil
 }
@@ -715,4 +757,10 @@ func (s *consumerLister) consumerNames(ctx context.Context, stream string) ([]st
 	s.pageInfo = &resp.apiPaged
 	s.offset += len(resp.Consumers)
 	return resp.Consumers, nil
+}
+
+// UnpinConsumer unpins the currently pinned client for a consumer for the given group name.
+// If consumer does not exist, ErrConsumerNotFound is returned.
+func (s *stream) UnpinConsumer(ctx context.Context, consumer string, group string) error {
+	return unpinConsumer(ctx, s.js, s.name, consumer, group)
 }

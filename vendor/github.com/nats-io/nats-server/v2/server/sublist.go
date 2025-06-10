@@ -1,4 +1,4 @@
-// Copyright 2016-2024 The NATS Authors
+// Copyright 2016-2025 The NATS Authors
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -1271,12 +1271,12 @@ func isValidLiteralSubject(tokens []string) bool {
 	return true
 }
 
-// ValidateMappingDestination returns nil error if the subject is a valid subject mapping destination subject
-func ValidateMappingDestination(subject string) error {
-	if subject == _EMPTY_ {
+// ValidateMapping returns nil error if the subject is a valid subject mapping destination subject
+func ValidateMapping(src string, dest string) error {
+	if dest == _EMPTY_ {
 		return nil
 	}
-	subjectTokens := strings.Split(subject, tsep)
+	subjectTokens := strings.Split(dest, tsep)
 	sfwc := false
 	for _, t := range subjectTokens {
 		length := len(t)
@@ -1284,6 +1284,7 @@ func ValidateMappingDestination(subject string) error {
 			return &mappingDestinationErr{t, ErrInvalidMappingDestinationSubject}
 		}
 
+		// if it looks like it contains a mapping function, it should be a valid mapping function
 		if length > 4 && t[0] == '{' && t[1] == '{' && t[length-2] == '}' && t[length-1] == '}' {
 			if !partitionMappingFunctionRegEx.MatchString(t) &&
 				!wildcardMappingFunctionRegEx.MatchString(t) &&
@@ -1304,7 +1305,10 @@ func ValidateMappingDestination(subject string) error {
 			return ErrInvalidMappingDestinationSubject
 		}
 	}
-	return nil
+
+	// Finally, verify that the transform can actually be created from the source and destination
+	_, err := NewSubjectTransform(src, dest)
+	return err
 }
 
 // Will check tokens and report back if the have any partial or full wildcards.
@@ -1743,10 +1747,6 @@ func IntersectStree[T any](st *stree.SubjectTree[T], sl *Sublist, cb func(subj [
 }
 
 func intersectStree[T any](st *stree.SubjectTree[T], r *level, subj []byte, cb func(subj []byte, entry *T)) {
-	if r.numNodes() == 0 {
-		st.Match(subj, cb)
-		return
-	}
 	nsubj := subj
 	if len(nsubj) > 0 {
 		nsubj = append(subj, '.')
@@ -1762,15 +1762,28 @@ func intersectStree[T any](st *stree.SubjectTree[T], r *level, subj []byte, cb f
 		// check whether there's interest at this level (without triggering dupes) and
 		// match if so.
 		nsubj := append(nsubj, '*')
-		if len(r.pwc.psubs)+len(r.pwc.qsubs) > 0 && r.pwc.next != nil && r.pwc.next.numNodes() > 0 {
+		if len(r.pwc.psubs)+len(r.pwc.qsubs) > 0 {
 			st.Match(nsubj, cb)
 		}
-		intersectStree(st, r.pwc.next, nsubj, cb)
-	case r.numNodes() > 0:
+		if r.pwc.next != nil && r.pwc.next.numNodes() > 0 {
+			intersectStree(st, r.pwc.next, nsubj, cb)
+		}
+	default:
 		// Normal node with subject literals, keep iterating.
 		for t, n := range r.nodes {
 			nsubj := append(nsubj, t...)
-			intersectStree(st, n.next, nsubj, cb)
+			if len(n.psubs)+len(n.qsubs) > 0 {
+				if subjectHasWildcard(bytesToString(nsubj)) {
+					st.Match(nsubj, cb)
+				} else {
+					if e, ok := st.Find(nsubj); ok {
+						cb(nsubj, e)
+					}
+				}
+			}
+			if n.next != nil && n.next.numNodes() > 0 {
+				intersectStree(st, n.next, nsubj, cb)
+			}
 		}
 	}
 }

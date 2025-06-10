@@ -204,6 +204,12 @@ type (
 		// DeleteConsumer removes a consumer with given name from a stream.
 		// If consumer does not exist, ErrConsumerNotFound is returned.
 		DeleteConsumer(ctx context.Context, stream string, consumer string) error
+
+		// PauseConsumer pauses a consumer until the given time.
+		PauseConsumer(ctx context.Context, stream string, consumer string, pauseUntil time.Time) (*ConsumerPauseResponse, error)
+
+		// ResumeConsumer resumes a paused consumer.
+		ResumeConsumer(ctx context.Context, stream string, consumer string) (*ConsumerPauseResponse, error)
 	}
 
 	// StreamListOpt is a functional option for [StreamManager.ListStreams] and
@@ -255,11 +261,17 @@ type (
 
 	// APIStats reports on API calls to JetStream for this account.
 	APIStats struct {
+		// Level is the API level for this account.
+		Level int `json:"level"`
+
 		// Total is the total number of API calls.
 		Total uint64 `json:"total"`
 
 		// Errors is the total number of API errors.
 		Errors uint64 `json:"errors"`
+
+		// Inflight is the number of API calls currently in flight.
+		Inflight uint64 `json:"inflight,omitempty"`
 	}
 
 	// AccountLimits includes the JetStream limits of the current account.
@@ -297,6 +309,11 @@ type (
 
 		// Domain is the domain name token used when sending JetStream requests.
 		Domain string
+
+		// DefaultTimeout is the default timeout used for JetStream API requests.
+		// This applies when the context passed to JetStream methods does not have
+		// a deadline set.
+		DefaultTimeout time.Duration
 
 		publisherOpts asyncPublisherOpts
 
@@ -401,6 +418,7 @@ func New(nc *nats.Conn, opts ...JetStreamOpt) (JetStream, error) {
 		publisherOpts: asyncPublisherOpts{
 			maxpa: defaultAsyncPubAckInflight,
 		},
+		DefaultTimeout: defaultAPITimeout,
 	}
 	setReplyPrefix(nc, &jsOpts)
 	for _, opt := range opts {
@@ -445,7 +463,8 @@ func NewWithAPIPrefix(nc *nats.Conn, apiPrefix string, opts ...JetStreamOpt) (Je
 		publisherOpts: asyncPublisherOpts{
 			maxpa: defaultAsyncPubAckInflight,
 		},
-		APIPrefix: apiPrefix,
+		APIPrefix:      apiPrefix,
+		DefaultTimeout: defaultAPITimeout,
 	}
 	setReplyPrefix(nc, &jsOpts)
 	for _, opt := range opts {
@@ -482,7 +501,8 @@ func NewWithDomain(nc *nats.Conn, domain string, opts ...JetStreamOpt) (JetStrea
 		publisherOpts: asyncPublisherOpts{
 			maxpa: defaultAsyncPubAckInflight,
 		},
-		Domain: domain,
+		Domain:         domain,
+		DefaultTimeout: defaultAPITimeout,
 	}
 	setReplyPrefix(nc, &jsOpts)
 	for _, opt := range opts {
@@ -812,6 +832,20 @@ func (js *jetStream) DeleteConsumer(ctx context.Context, stream string, name str
 	return deleteConsumer(ctx, js, stream, name)
 }
 
+func (js *jetStream) PauseConsumer(ctx context.Context, stream string, consumer string, pauseUntil time.Time) (*ConsumerPauseResponse, error) {
+	if err := validateStreamName(stream); err != nil {
+		return nil, err
+	}
+	return pauseConsumer(ctx, js, stream, consumer, &pauseUntil)
+}
+
+func (js *jetStream) ResumeConsumer(ctx context.Context, stream string, consumer string) (*ConsumerPauseResponse, error) {
+	if err := validateStreamName(stream); err != nil {
+		return nil, err
+	}
+	return resumeConsumer(ctx, js, stream, consumer)
+}
+
 func validateStreamName(stream string) error {
 	if stream == "" {
 		return ErrStreamNameRequired
@@ -1069,7 +1103,7 @@ func (js *jetStream) wrapContextWithoutDeadline(ctx context.Context) (context.Co
 	if _, ok := ctx.Deadline(); ok {
 		return ctx, nil
 	}
-	return context.WithTimeout(ctx, defaultAPITimeout)
+	return context.WithTimeout(ctx, js.opts.DefaultTimeout)
 }
 
 // CleanupPublisher will cleanup the publishing side of JetStreamContext.

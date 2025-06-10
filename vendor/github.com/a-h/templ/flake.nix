@@ -2,14 +2,14 @@
   description = "templ";
 
   inputs = {
-    nixpkgs.url = "github:NixOS/nixpkgs/nixos-24.11";
+    nixpkgs.url = "github:NixOS/nixpkgs/nixos-25.05";
     nixpkgs-unstable.url = "github:NixOS/nixpkgs/nixos-unstable";
     gitignore = {
       url = "github:hercules-ci/gitignore.nix";
       inputs.nixpkgs.follows = "nixpkgs";
     };
     version = {
-      url = "github:a-h/version";
+      url = "github:a-h/version/0.0.8";
       inputs.nixpkgs.follows = "nixpkgs";
     };
     xc = {
@@ -37,12 +37,14 @@
         rec {
           default = templ;
 
-          templ = pkgs.buildGo123Module {
+          templ = pkgs.buildGo124Module {
             name = "templ";
             subPackages = [ "cmd/templ" ];
             src = gitignore.lib.gitignoreSource ./.;
-            vendorHash = "sha256-JVOsjBn1LV8p6HHelfAO1Qcqi/tPg1S3xBffo+0aplE=";
-            CGO_ENABLED = 0;
+            vendorHash = "sha256-q4L+r6S0eMNd5hP9UQCI+GxSJoiMGpjd0UTxA8zb6KU=";
+            env = {
+              CGO_ENABLED = 0;
+            };
             flags = [
               "-trimpath"
             ];

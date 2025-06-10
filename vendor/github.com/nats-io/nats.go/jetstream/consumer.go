@@ -1,4 +1,4 @@
-// Copyright 2022-2024 The NATS Authors
+// Copyright 2022-2025 The NATS Authors
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -19,6 +19,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/nats-io/nats.go/internal/syncx"
 	"github.com/nats-io/nuid"
@@ -327,6 +328,43 @@ func deleteConsumer(ctx context.Context, js *jetStream, stream, consumer string)
 	return nil
 }
 
+func pauseConsumer(ctx context.Context, js *jetStream, stream, consumer string, pauseUntil *time.Time) (*ConsumerPauseResponse, error) {
+	ctx, cancel := js.wrapContextWithoutDeadline(ctx)
+	if cancel != nil {
+		defer cancel()
+	}
+	if err := validateConsumerName(consumer); err != nil {
+		return nil, err
+	}
+	subject := fmt.Sprintf(apiConsumerPauseT, stream, consumer)
+
+	var resp consumerPauseApiResponse
+	req, err := json.Marshal(consumerPauseRequest{
+		PauseUntil: pauseUntil,
+	})
+	if err != nil {
+		return nil, err
+	}
+	if _, err := js.apiRequestJSON(ctx, subject, &resp, req); err != nil {
+		return nil, err
+	}
+	if resp.Error != nil {
+		if resp.Error.ErrorCode == JSErrCodeConsumerNotFound {
+			return nil, ErrConsumerNotFound
+		}
+		return nil, resp.Error
+	}
+	return &ConsumerPauseResponse{
+		Paused:         resp.Paused,
+		PauseUntil:     resp.PauseUntil,
+		PauseRemaining: resp.PauseRemaining,
+	}, nil
+}
+
+func resumeConsumer(ctx context.Context, js *jetStream, stream, consumer string) (*ConsumerPauseResponse, error) {
+	return pauseConsumer(ctx, js, stream, consumer, nil)
+}
+
 func validateConsumerName(dur string) error {
 	if dur == "" {
 		return fmt.Errorf("%w: '%s'", ErrInvalidConsumerName, "name is required")
@@ -334,5 +372,39 @@ func validateConsumerName(dur string) error {
 	if strings.ContainsAny(dur, ">*. /\\") {
 		return fmt.Errorf("%w: '%s'", ErrInvalidConsumerName, dur)
 	}
+	return nil
+}
+
+func unpinConsumer(ctx context.Context, js *jetStream, stream, consumer, group string) error {
+	ctx, cancel := js.wrapContextWithoutDeadline(ctx)
+	if cancel != nil {
+		defer cancel()
+	}
+	if err := validateConsumerName(consumer); err != nil {
+		return err
+	}
+	unpinSubject := fmt.Sprintf(apiConsumerUnpinT, stream, consumer)
+
+	var req = consumerUnpinRequest{
+		Group: group,
+	}
+
+	reqJSON, err := json.Marshal(req)
+	if err != nil {
+		return err
+	}
+
+	var resp apiResponse
+
+	if _, err := js.apiRequestJSON(ctx, unpinSubject, &resp, reqJSON); err != nil {
+		return err
+	}
+	if resp.Error != nil {
+		if resp.Error.ErrorCode == JSErrCodeConsumerNotFound {
+			return ErrConsumerNotFound
+		}
+		return resp.Error
+	}
+
 	return nil
 }
