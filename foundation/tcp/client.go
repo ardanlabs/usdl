@@ -36,7 +36,7 @@ type Client struct {
 	Reader    io.Reader
 	Writer    io.Writer
 	ctx       context.Context
-	traceID   string
+	name      string
 	log       internalLogger
 	tcpAddr   *net.TCPAddr
 	clients   *clients
@@ -50,22 +50,29 @@ type Client struct {
 	nWrites   int
 }
 
+// Context returns the context for the client.
+func (clt *Client) Context() context.Context {
+	return clt.ctx
+}
+
+// TraceID returns the trace ID for the client.
+func (clt *Client) TraceID() uuid.UUID {
+	return GetTraceID(clt.ctx)
+}
+
 // newClient creates a new client for an incoming connection.
-func newClient(log internalLogger, clients *clients, handlers Handlers, conn net.Conn) *Client {
+func newClient(name string, log internalLogger, clients *clients, handlers Handlers, conn net.Conn) *Client {
 	now := time.Now().UTC()
 
 	// This will be a TCPAddr 100% of the time.
 	raddr := conn.RemoteAddr().(*net.TCPAddr)
 
-	traceID := uuid.New()
-	ctx := setTraceID(context.Background(), traceID)
-
 	clt := Client{
 		Conn:      conn,
 		Reader:    conn,
 		Writer:    conn,
-		ctx:       ctx,
-		traceID:   traceID.String(),
+		ctx:       setTraceID(context.Background(), uuid.New()),
+		name:      name,
 		log:       log,
 		tcpAddr:   raddr,
 		clients:   clients,
@@ -78,7 +85,7 @@ func newClient(log internalLogger, clients *clients, handlers Handlers, conn net
 
 	// Inform the user we have a socket connection for a
 	// new client.
-	handlers.Bind(ctx, &clt)
+	handlers.Bind(&clt)
 
 	return &clt
 }
@@ -86,11 +93,6 @@ func newClient(log internalLogger, clients *clients, handlers Handlers, conn net
 // SetContext sets the context for the client.
 func (clt *Client) SetContext(ctx context.Context) {
 	clt.ctx = ctx
-}
-
-// TraceID retrieves the trace ID for the client connection.
-func (clt *Client) TraceID() string {
-	return clt.traceID
 }
 
 func (clt *Client) start() {
@@ -102,16 +104,16 @@ func (clt *Client) close() {
 	clt.Conn.Close()
 	clt.wg.Wait()
 
-	clt.log(EvtDrop, TypInfo, clt.ipAddress, clt.traceID, "connection closed")
+	clt.log(clt.ctx, clt.name, EvtDrop, TypInfo, clt.ipAddress, "connection closed")
 }
 
 func (clt *Client) read() {
-	clt.log(EvtRead, TypInfo, clt.ipAddress, clt.traceID, "client G started")
+	clt.log(clt.ctx, clt.name, EvtRead, TypInfo, clt.ipAddress, "client G started")
 
 	defer func() {
-		clt.log(EvtDrop, TypInfo, clt.ipAddress, clt.traceID, "client G disconnected")
+		clt.log(clt.ctx, clt.name, EvtDrop, TypInfo, clt.ipAddress, "client G disconnected")
 		if err := clt.clients.close(clt.Conn); err != nil {
-			clt.log(EvtDrop, TypError, clt.ipAddress, clt.traceID, "error closing client: %s", err)
+			clt.log(clt.ctx, clt.name, EvtDrop, TypError, clt.ipAddress, "error closing client: %s", err)
 		}
 		clt.wg.Done()
 	}()
@@ -119,7 +121,7 @@ func (clt *Client) read() {
 close:
 	for {
 		// Wait for a message to arrive.
-		data, length, err := clt.handlers.Read(clt.ctx, clt)
+		data, length, err := clt.handlers.Read(clt)
 		clt.lastAct = time.Now().UTC()
 		clt.nReads++
 
@@ -159,6 +161,6 @@ close:
 
 		// Process the request on this goroutine that is
 		// handling the socket connection.
-		clt.handlers.Process(clt.ctx, &r, clt)
+		clt.handlers.Process(&r, clt)
 	}
 }

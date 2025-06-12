@@ -36,8 +36,9 @@ func run() error {
 	// -------------------------------------------------------------------------
 	// SERVER SIDE
 
-	logger := func(evt string, typ string, ipAddress string, traceID string, format string, a ...any) {
-		log.Printf("EVENT: %s, %s, %s, %s, %s", evt, typ, ipAddress, traceID, fmt.Sprintf(format, a...))
+	logger := func(ctx context.Context, name string, evt string, typ string, ipAddress string, format string, a ...any) {
+		traceCtxID := tcp.GetTraceID(ctx)
+		log.Printf("EVENT: %s, %s, %s, %s, [%s] %s", name, evt, typ, ipAddress, traceCtxID, fmt.Sprintf(format, a...))
 	}
 
 	cfg := tcp.ServerConfig{
@@ -48,7 +49,7 @@ func run() error {
 	}
 
 	// Create a new TCP value.
-	server, err := tcp.NewServer("TEST", cfg)
+	server, err := tcp.NewServer("SERVER", cfg)
 	if err != nil {
 		return fmt.Errorf("creating new TCP listener: %w", err)
 	}
@@ -104,7 +105,7 @@ func tcpClient(logger tcp.Logger) error {
 		Logger:   logger,
 	}
 
-	cm, err := tcp.NewClientManager(cfg)
+	cm, err := tcp.NewClientManager("CLIENT-MANAGER", cfg)
 	if err != nil {
 		return fmt.Errorf("creating new TCP client manager: %w", err)
 	}
@@ -117,7 +118,7 @@ func tcpClient(logger tcp.Logger) error {
 			fmt.Println(i, "***> Waiting for server to start...")
 			time.Sleep(300 * time.Millisecond)
 
-			clt, err := cm.Dial(netType, addr)
+			clt, err := cm.Dial(context.TODO(), netType, addr)
 			if err != nil {
 				fmt.Println(i, "dialing a new TCP connection: %w", err)
 				return
@@ -145,14 +146,14 @@ var keyValue keyType = 0
 
 type tcpSrvHandlers struct{}
 
-func (tcpSrvHandlers) Bind(ctx context.Context, clt *tcp.Client) {
+func (tcpSrvHandlers) Bind(clt *tcp.Client) {
 	fmt.Println("***> SERVER: BIND", "TRACEDID", clt.TraceID(), clt.Conn.RemoteAddr().String(), clt.Conn.LocalAddr().String())
 	clt.Reader = bufio.NewReader(clt.Conn)
 }
 
 var bill atomic.Int64
 
-func (tcpSrvHandlers) Read(ctx context.Context, clt *tcp.Client) ([]byte, int, error) {
+func (tcpSrvHandlers) Read(clt *tcp.Client) ([]byte, int, error) {
 	bufReader := clt.Reader.(*bufio.Reader)
 
 	fmt.Println("***> SERVER: WAITING ON READ", "TRACEDID", clt.TraceID())
@@ -173,7 +174,7 @@ func (tcpSrvHandlers) Read(ctx context.Context, clt *tcp.Client) ([]byte, int, e
 	return []byte(line), len(line), nil
 }
 
-func (tcpSrvHandlers) Process(ctx context.Context, r *tcp.Request, clt *tcp.Client) {
+func (tcpSrvHandlers) Process(r *tcp.Request, clt *tcp.Client) {
 	fmt.Println("***> SERVER: CLIENT MESSAGE:", "TRACEDID", clt.TraceID(), string(r.Data))
 
 	resp := "GOT IT\n"
@@ -190,15 +191,15 @@ func (tcpSrvHandlers) Process(ctx context.Context, r *tcp.Request, clt *tcp.Clie
 
 type tcpCltHandlers struct{}
 
-func (tcpCltHandlers) Bind(ctx context.Context, clt *tcp.Client) {
-	fmt.Println("***> CLIENT: BIND", clt.Conn.RemoteAddr().String(), clt.Conn.LocalAddr().String())
+func (tcpCltHandlers) Bind(clt *tcp.Client) {
+	fmt.Println("***> CLIENT: BIND", "TRACEDID", clt.TraceID(), clt.Conn.RemoteAddr().String(), clt.Conn.LocalAddr().String())
 	clt.Reader = bufio.NewReader(clt.Conn)
 }
 
-func (tcpCltHandlers) Read(ctx context.Context, clt *tcp.Client) ([]byte, int, error) {
+func (tcpCltHandlers) Read(clt *tcp.Client) ([]byte, int, error) {
 	bufReader := clt.Reader.(*bufio.Reader)
 
-	fmt.Println("***> CLIENT: WAITING ON READ")
+	fmt.Println("***> CLIENT: WAITING ON READ", "TRACEDID", clt.TraceID())
 
 	// Read a small string to keep the code simple.
 	line, err := bufReader.ReadString('\n')
@@ -206,13 +207,13 @@ func (tcpCltHandlers) Read(ctx context.Context, clt *tcp.Client) ([]byte, int, e
 		return nil, 0, err
 	}
 
-	fmt.Println("***> CLIENT: MESSAGE READ")
+	fmt.Println("***> CLIENT: MESSAGE READ", "TRACEDID", clt.TraceID())
 
 	return []byte(line), len(line), nil
 }
 
-func (tcpCltHandlers) Process(ctx context.Context, r *tcp.Request, clt *tcp.Client) {
-	fmt.Println("***> CLIENT: SERVER MESSAGE:", string(r.Data))
+func (tcpCltHandlers) Process(r *tcp.Request, clt *tcp.Client) {
+	fmt.Println("***> CLIENT: SERVER MESSAGE:", "TRACEDID", clt.TraceID(), string(r.Data))
 
 	cltWG.Done()
 }

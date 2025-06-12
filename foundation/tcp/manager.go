@@ -5,8 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"net"
-
-	"github.com/google/uuid"
 )
 
 // ClientConfig provides a data structure of required configuration parameters.
@@ -29,25 +27,25 @@ func (cfg ClientConfig) validate() error {
 
 // ClientManager manages a collection of TCP client connections.
 type ClientManager struct {
+	name     string
 	log      internalLogger
-	traceID  string
 	handlers Handlers
 	clients  *clients
 }
 
 // NewClientManager creates a new ClientManager.
-func NewClientManager(cfg ClientConfig) (*ClientManager, error) {
+func NewClientManager(name string, cfg ClientConfig) (*ClientManager, error) {
 	if err := cfg.validate(); err != nil {
 		return nil, err
 	}
 
-	l := func(evt int, typ int, ipAddress string, traceID string, format string, a ...any) {
-		cfg.Logger(eventTypes[evt], eventSubTypes[typ], ipAddress, traceID, fmt.Sprintf(format, a...))
+	l := func(ctx context.Context, name string, evt int, typ int, ipAddress string, format string, a ...any) {
+		cfg.Logger(ctx, name, eventTypes[evt], eventSubTypes[typ], ipAddress, fmt.Sprintf(format, a...))
 	}
 
 	cm := ClientManager{
+		name:     name,
 		log:      l,
-		traceID:  uuid.New().String(),
 		handlers: cfg.Handlers,
 		clients:  newClients(l),
 	}
@@ -57,8 +55,8 @@ func NewClientManager(cfg ClientConfig) (*ClientManager, error) {
 
 // Shutdown shuts down the manager and closes all connections.
 func (cm *ClientManager) Shutdown(ctx context.Context) error {
-	cm.log(EvtStop, TypInfo, "", cm.traceID, "client manager started shutdown")
-	defer cm.log(EvtStop, TypInfo, "", cm.traceID, "client manager completed shutdown")
+	cm.log(ctx, cm.name, EvtStop, TypInfo, "", "client manager started shutdown")
+	defer cm.log(ctx, cm.name, EvtStop, TypInfo, "", "client manager completed shutdown")
 
 	ctx, cancel := context.WithCancel(ctx)
 
@@ -73,7 +71,7 @@ func (cm *ClientManager) Shutdown(ctx context.Context) error {
 	<-ctx.Done()
 
 	if errors.Is(ctx.Err(), context.DeadlineExceeded) {
-		cm.log(EvtStop, TypInfo, "", cm.traceID, "client manager deadline exceeded")
+		cm.log(ctx, cm.name, EvtStop, TypInfo, "", "client manager deadline exceeded")
 		return ctx.Err()
 	}
 
@@ -81,7 +79,7 @@ func (cm *ClientManager) Shutdown(ctx context.Context) error {
 }
 
 // Dial establishes a new TCP connection to the specified address.
-func (cm *ClientManager) Dial(network string, address string) (*Client, error) {
+func (cm *ClientManager) Dial(ctx context.Context, network string, address string) (*Client, error) {
 	conn, err := net.Dial(network, address)
 	if err != nil {
 		return nil, fmt.Errorf("dial: %w", err)
@@ -89,7 +87,7 @@ func (cm *ClientManager) Dial(network string, address string) (*Client, error) {
 
 	// Add this new connection to the manager map and
 	// start the client goroutine.
-	clt, err := cm.startNewClient(conn)
+	clt, err := cm.startNewClient(ctx, conn)
 	if err != nil {
 		return nil, fmt.Errorf("startNewClient: %w", err)
 	}
@@ -100,16 +98,16 @@ func (cm *ClientManager) Dial(network string, address string) (*Client, error) {
 // =============================================================================
 
 // startNewClient takes a new connection and adds it to the manager.
-func (cm *ClientManager) startNewClient(conn net.Conn) (*Client, error) {
+func (cm *ClientManager) startNewClient(ctx context.Context, conn net.Conn) (*Client, error) {
 	tcpAddr := conn.LocalAddr().(*net.TCPAddr)
 
 	if _, err := cm.clients.find(tcpAddr); err == nil {
-		cm.log(EvtJoin, TypError, tcpAddr.IP.String(), cm.traceID, "already connected")
+		cm.log(ctx, cm.name, EvtJoin, TypError, tcpAddr.IP.String(), "already connected")
 		conn.Close()
 		return nil, errors.New("client already connected")
 	}
 
-	clt := newClient(cm.log, cm.clients, cm.handlers, conn)
+	clt := newClient(cm.name, cm.log, cm.clients, cm.handlers, conn)
 
 	cm.clients.add(clt)
 

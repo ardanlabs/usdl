@@ -2,7 +2,6 @@ package tcp_test
 
 import (
 	"bufio"
-	"context"
 	"fmt"
 	"sync/atomic"
 	"time"
@@ -14,13 +13,13 @@ import (
 type tcpHandlers struct{}
 
 // Bind is called to init to reader and writer.
-func (tcpHandlers) Bind(ctx context.Context, clt *tcp.Client) {
+func (tcpHandlers) Bind(clt *tcp.Client) {
 	clt.Reader = bufio.NewReader(clt.Conn)
 }
 
 // Read implements the udp.ReqHandler interface. It is provided a request
 // value to popular and a io.Reader that was created in the Bind above.
-func (tcpHandlers) Read(ctx context.Context, clt *tcp.Client) ([]byte, int, error) {
+func (tcpHandlers) Read(clt *tcp.Client) ([]byte, int, error) {
 	bufReader := clt.Reader.(*bufio.Reader)
 
 	// Read a small string to keep the code simple.
@@ -35,7 +34,7 @@ func (tcpHandlers) Read(ctx context.Context, clt *tcp.Client) ([]byte, int, erro
 var dur int64
 
 // Process is used to handle the processing of the message.
-func (tcpHandlers) Process(ctx context.Context, r *tcp.Request, clt *tcp.Client) {
+func (tcpHandlers) Process(r *tcp.Request, clt *tcp.Client) {
 	if _, err := clt.Writer.Write([]byte("GOT IT\n")); err != nil {
 		fmt.Println("***> SERVER: ERROR SENDING RESPONSE:", err)
 		return

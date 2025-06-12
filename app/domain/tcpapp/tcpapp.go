@@ -2,7 +2,6 @@
 package tcpapp
 
 import (
-	"context"
 	"fmt"
 
 	"github.com/ardanlabs/usdl/foundation/logger"
@@ -22,16 +21,15 @@ func NewServerHandlers(log *logger.Logger) *ServerHandlers {
 }
 
 // Bind binds the client to the server handlers.
-func (sh ServerHandlers) Bind(ctx context.Context, clt *tcp.Client) {
-	sh.log.Info(ctx, "bind")
+func (sh ServerHandlers) Bind(clt *tcp.Client) {
+	sh.log.Info(clt.Context(), "bind")
 }
 
 // Read reads data from the client connection.
-func (ServerHandlers) Read(ctx context.Context, clt *tcp.Client) ([]byte, int, error) {
+func (ServerHandlers) Read(clt *tcp.Client) ([]byte, int, error) {
 	return nil, 0, fmt.Errorf("not implemented")
 }
 
 // Process processes the request from the client.
-func (ServerHandlers) Process(ctx context.Context, r *tcp.Request, clt *tcp.Client) {
-
+func (ServerHandlers) Process(r *tcp.Request, clt *tcp.Client) {
 }

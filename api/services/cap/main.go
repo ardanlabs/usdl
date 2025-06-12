@@ -104,9 +104,10 @@ func run(ctx context.Context, log *logger.Logger) error {
 			IDFilePath string `conf:"default:zarf/cap"`
 		}
 		TCP struct {
-			Name    string `conf:"default:cap"`
-			NetType string `conf:"default:tcp4"`
-			Addr    string `conf:"default:0.0.0.0:4000"`
+			ServerName string `conf:"default:tcp-server"`
+			ClientName string `conf:"default:tcp-clientmanager"`
+			NetType    string `conf:"default:tcp4"`
+			Addr       string `conf:"default:0.0.0.0:4000"`
 		}
 	}{
 		Version: conf.Version{
@@ -152,10 +153,8 @@ func run(ctx context.Context, log *logger.Logger) error {
 	// -------------------------------------------------------------------------
 	// TCP
 
-	tcpCtx := context.Background()
-
-	tcpLogger := func(evt string, typ string, ipAddress string, traceID string, format string, a ...any) {
-		log.Info(tcpCtx, "Tcp Event", "evt", evt, "typ", typ, "ipAddress", ipAddress, "trace_id", traceID, "info", fmt.Sprintf(format, a...))
+	tcpLogger := func(ctx context.Context, name string, evt string, typ string, ipAddress string, format string, a ...any) {
+		log.Info(ctx, "Tcp Event", "name", name, "evt", evt, "typ", typ, "ipAddress", ipAddress, "info", fmt.Sprintf(format, a...))
 	}
 
 	tcpCfg := tcp.ServerConfig{
@@ -165,11 +164,11 @@ func run(ctx context.Context, log *logger.Logger) error {
 		Logger:   tcpLogger,
 	}
 
-	tcpSrv, err := tcp.NewServer(cfg.TCP.Name, tcpCfg)
+	tcpSrv, err := tcp.NewServer(cfg.TCP.ServerName, tcpCfg)
 	if err != nil {
 		return fmt.Errorf("nats connect: %w", err)
 	}
-	defer tcpSrv.Shutdown(tcpCtx)
+	defer tcpSrv.Shutdown(ctx)
 
 	tcpErrors := make(chan error, 1)
 
