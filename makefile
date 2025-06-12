@@ -54,9 +54,6 @@ run-cap:
 run-tui:
 	go run api/clients/tui/main.go
 
-run-tui-ai:
-	go run api/clients/tui/main.go --aimode=true
-
 run-datastar:
 	templ generate app/domain/datastarapp/
 	go run api/services/datastar/main.go
