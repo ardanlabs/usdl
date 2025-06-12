@@ -22,32 +22,49 @@ var (
 	ErrNotExists = fmt.Errorf("user doesn't exists")
 )
 
-// Storer defines the set of behavior for user management.
-type Storer interface {
-	Add(ctx context.Context, usr User) error
+// UIClientManager defines the set of behavior for user management.
+type UIClientManager interface {
+	Add(ctx context.Context, usr UIUser) error
 	UpdateLastPing(ctx context.Context, userID common.Address) error
-	UpdateLastPong(ctx context.Context, userID common.Address) (User, error)
+	UpdateLastPong(ctx context.Context, userID common.Address) (UIUser, error)
 	Remove(ctx context.Context, userID common.Address)
-	Connections() map[common.Address]Connection
-	Retrieve(ctx context.Context, userID common.Address) (User, error)
+	Connections() map[common.Address]UIConnection
+	Retrieve(ctx context.Context, userID common.Address) (UIUser, error)
+}
+
+// TCPClientManager defines the set of behavior for user management.
+type TCPClientManager interface {
+	Dial(ctx context.Context, userID common.Address, network string, address string) (TCPUser, error)
+	Drop(ctx context.Context, userID common.Address)
+	Retrieve(ctx context.Context, userID common.Address) (TCPUser, error)
+}
+
+type Config struct {
+	Log         *logger.Logger
+	NATSConn    *nats.Conn
+	UICltMgr    UIClientManager
+	TCPCltMgr   TCPClientManager
+	NATSSubject string
+	CAPID       uuid.UUID
 }
 
 // Business represents a chat support.
 type Business struct {
-	log      *logger.Logger
-	js       jetstream.JetStream
-	stream   jetstream.Stream
-	consumer jetstream.Consumer
-	capID    uuid.UUID
-	subject  string
-	storer   Storer
+	log         *logger.Logger
+	js          jetstream.JetStream
+	stream      jetstream.Stream
+	consumer    jetstream.Consumer
+	capID       uuid.UUID
+	natsSubject string
+	uiCltMgr    UIClientManager
+	tcpCltMgr   TCPClientManager
 }
 
 // NewBusiness creates a new chat support.
-func NewBusiness(log *logger.Logger, conn *nats.Conn, users Storer, subject string, capID uuid.UUID) (*Business, error) {
+func NewBusiness(cfg Config) (*Business, error) {
 	ctx := context.TODO()
 
-	js, err := jetstream.New(conn)
+	js, err := jetstream.New(cfg.NATSConn)
 	if err != nil {
 		return nil, fmt.Errorf("nats new js: %w", err)
 	}
@@ -55,8 +72,8 @@ func NewBusiness(log *logger.Logger, conn *nats.Conn, users Storer, subject stri
 	// js.DeleteStream(ctx, subject)
 
 	s1, err := js.CreateStream(ctx, jetstream.StreamConfig{
-		Name:     subject,
-		Subjects: []string{subject},
+		Name:     cfg.NATSSubject,
+		Subjects: []string{cfg.NATSSubject},
 		MaxAge:   24 * time.Hour,
 	})
 	if err != nil {
@@ -64,7 +81,7 @@ func NewBusiness(log *logger.Logger, conn *nats.Conn, users Storer, subject stri
 	}
 
 	c1, err := s1.CreateOrUpdateConsumer(ctx, jetstream.ConsumerConfig{
-		Durable:       capID.String(),
+		Durable:       cfg.CAPID.String(),
 		AckPolicy:     jetstream.AckExplicitPolicy,
 		DeliverPolicy: jetstream.DeliverNewPolicy,
 	})
@@ -72,51 +89,63 @@ func NewBusiness(log *logger.Logger, conn *nats.Conn, users Storer, subject stri
 		return nil, fmt.Errorf("nats create consumer: %w", err)
 	}
 
-	c := Business{
-		log:      log,
-		js:       js,
-		stream:   s1,
-		consumer: c1,
-		capID:    capID,
-		subject:  subject,
-		storer:   users,
+	b := Business{
+		log:         cfg.Log,
+		js:          js,
+		stream:      s1,
+		consumer:    c1,
+		capID:       cfg.CAPID,
+		natsSubject: cfg.NATSSubject,
+		uiCltMgr:    cfg.UICltMgr,
+		tcpCltMgr:   cfg.TCPCltMgr,
 	}
 
-	c1.Consume(c.busReadMessage(), jetstream.PullMaxMessages(1))
+	c1.Consume(b.natsReadMessage(), jetstream.PullMaxMessages(1))
 
 	const maxWait = 10 * time.Second
-	c.uiPing(maxWait)
+	b.uiPing(maxWait)
 
-	return &c, nil
+	return &b, nil
+}
+
+// DialP2PConnection dials a P2P connection to the given address for a client
+// p2p connection. The address should be in the format "host:port".
+func (b *Business) DialP2PConnection(ctx context.Context, userID common.Address, address string) error {
+	_, err := b.tcpCltMgr.Dial(ctx, userID, "tcp4", address)
+	if err != nil {
+		return fmt.Errorf("dial p2p connection: %w", err)
+	}
+
+	return nil
 }
 
 // =============================================================================
 
-func (c *Business) isCriticalError(ctx context.Context, err error) bool {
+func (b *Business) isCriticalError(ctx context.Context, err error) bool {
 	switch e := err.(type) {
 	case *websocket.CloseError:
-		c.log.Info(ctx, "chat-isCriticalError", "status", "client disconnected")
+		b.log.Info(ctx, "chat-isCriticalError", "status", "client disconnected")
 		return true
 
 	case *net.OpError:
 		if !e.Temporary() {
-			c.log.Info(ctx, "chat-isCriticalError", "status", "client disconnected")
+			b.log.Info(ctx, "chat-isCriticalError", "status", "client disconnected")
 			return true
 		}
 		return false
 
 	default:
 		if errors.Is(err, context.Canceled) {
-			c.log.Info(ctx, "chat-isCriticalError", "status", "client canceled")
+			b.log.Info(ctx, "chat-isCriticalError", "status", "client canceled")
 			return true
 		}
 
 		if errors.Is(err, nats.ErrConnectionClosed) {
-			c.log.Info(ctx, "chat-isCriticalError", "status", "nats connection closed")
+			b.log.Info(ctx, "chat-isCriticalError", "status", "nats connection closed")
 			return true
 		}
 
-		c.log.Info(ctx, "chat-isCriticalError", "ERROR", err, "TYPE", fmt.Sprintf("%T", err))
+		b.log.Info(ctx, "chat-isCriticalError", "ERROR", err, "TYPE", fmt.Sprintf("%T", err))
 		return false
 	}
 }

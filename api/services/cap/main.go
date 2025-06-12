@@ -27,10 +27,11 @@ import (
 
 /*
 	CAP to CAP communication
-		- We spent the last class adding context and traceID support to TCP.
-		- We started adding tcp server to the CAP service.
-		- Look into passing context into the logger function. We may have one.
-		- Startup the TCP Client Manager.
+		- Add new client drop function to tcp package and extend out
+		- Finish the work on TCPClientManager
+			- Finish the Dial API saving the client to the new manager
+			- Line 146 of chatbus/ui.go and lookup the user in the new manager
+		- Add new route for establishing a p2p connection in app layer
 		- Wire in the double click to the TCP Client Manager.
 		- Tailscale
 
@@ -151,30 +152,54 @@ func run(ctx context.Context, log *logger.Logger) error {
 	log.Info(ctx, "startup", "status", "getting cap", "capID", capID)
 
 	// -------------------------------------------------------------------------
-	// TCP
+	// TCP Server
 
-	tcpLogger := func(ctx context.Context, name string, evt string, typ string, ipAddress string, format string, a ...any) {
-		log.Info(ctx, "Tcp Event", "name", name, "evt", evt, "typ", typ, "ipAddress", ipAddress, "info", fmt.Sprintf(format, a...))
+	tcpSrvLogger := func(ctx context.Context, name string, evt string, typ string, ipAddress string, format string, a ...any) {
+		log.Info(ctx, "Tcp Server Event", "name", name, "evt", evt, "typ", typ, "ipAddress", ipAddress, "info", fmt.Sprintf(format, a...))
 	}
 
-	tcpCfg := tcp.ServerConfig{
+	tcpSrvCfg := tcp.ServerConfig{
 		NetType:  cfg.TCP.NetType,
 		Addr:     cfg.TCP.Addr,
 		Handlers: tcpapp.NewServerHandlers(log),
-		Logger:   tcpLogger,
+		Logger:   tcpSrvLogger,
 	}
 
-	tcpSrv, err := tcp.NewServer(cfg.TCP.ServerName, tcpCfg)
+	tcpSrv, err := tcp.NewServer(cfg.TCP.ServerName, tcpSrvCfg)
 	if err != nil {
-		return fmt.Errorf("nats connect: %w", err)
+		return fmt.Errorf("tcp server: %w", err)
 	}
-	defer tcpSrv.Shutdown(ctx)
+	defer func() {
+		log.Info(ctx, "TCP", "status", "starting TCP server shutdown")
+		tcpSrv.Shutdown(ctx)
+	}()
 
 	tcpErrors := make(chan error, 1)
 
 	go func() {
 		log.Info(ctx, "TCP", "status", "starting TCP server")
 		tcpErrors <- tcpSrv.Listen()
+	}()
+
+	// -------------------------------------------------------------------------
+	// TCP Client Manager
+
+	tcpCltLogger := func(ctx context.Context, name string, evt string, typ string, ipAddress string, format string, a ...any) {
+		log.Info(ctx, "Tcp Client Event", "name", name, "evt", evt, "typ", typ, "ipAddress", ipAddress, "info", fmt.Sprintf(format, a...))
+	}
+
+	cfgCltCfg := tcp.ClientConfig{
+		Handlers: tcpapp.NewClientHandlers(log),
+		Logger:   tcpCltLogger,
+	}
+
+	tcpCM, err := tcp.NewClientManager(cfg.TCP.ClientName, cfgCltCfg)
+	if err != nil {
+		return fmt.Errorf("tcp client manager: %w", err)
+	}
+	defer func() {
+		log.Info(ctx, "TCP", "status", "starting TCP client manager shutdown")
+		tcpCM.Shutdown(ctx)
 	}()
 
 	// -------------------------------------------------------------------------
@@ -186,7 +211,16 @@ func run(ctx context.Context, log *logger.Logger) error {
 	}
 	defer nc.Close()
 
-	chatBus, err := chatbus.NewBusiness(log, nc, usermem.New(log), cfg.NATS.Subject, capID)
+	cfgBus := chatbus.Config{
+		Log:         log,
+		NATSConn:    nc,
+		UICltMgr:    usermem.New(log),
+		TCPCltMgr:   nil,
+		NATSSubject: cfg.NATS.Subject,
+		CAPID:       capID,
+	}
+
+	chatBus, err := chatbus.NewBusiness(cfgBus)
 	if err != nil {
 		return fmt.Errorf("chat: %w", err)
 	}

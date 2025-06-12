@@ -14,7 +14,7 @@ import (
 // Users provides user storage management.
 type Users struct {
 	log     *logger.Logger
-	users   map[common.Address]chatbus.User
+	users   map[common.Address]chatbus.UIUser
 	muUsers sync.RWMutex
 }
 
@@ -22,14 +22,14 @@ type Users struct {
 func New(log *logger.Logger) *Users {
 	u := Users{
 		log:   log,
-		users: make(map[common.Address]chatbus.User),
+		users: make(map[common.Address]chatbus.UIUser),
 	}
 
 	return &u
 }
 
 // Add adds a new user to the storage.
-func (u *Users) Add(ctx context.Context, usr chatbus.User) error {
+func (u *Users) Add(ctx context.Context, usr chatbus.UIUser) error {
 	u.muUsers.Lock()
 	defer u.muUsers.Unlock()
 
@@ -63,13 +63,13 @@ func (u *Users) UpdateLastPing(ctx context.Context, userID common.Address) error
 }
 
 // UpdateLastPong updates a user value's pong date/time.
-func (u *Users) UpdateLastPong(ctx context.Context, userID common.Address) (chatbus.User, error) {
+func (u *Users) UpdateLastPong(ctx context.Context, userID common.Address) (chatbus.UIUser, error) {
 	u.muUsers.Lock()
 	defer u.muUsers.Unlock()
 
 	usr, exists := u.users[userID]
 	if !exists {
-		return chatbus.User{}, chatbus.ErrNotExists
+		return chatbus.UIUser{}, chatbus.ErrNotExists
 	}
 
 	usr.LastPong = time.Now()
@@ -98,14 +98,14 @@ func (u *Users) Remove(ctx context.Context, userID common.Address) {
 
 // Connections returns all the know users with their connections. A connection
 // that is not valid shouldn't be used.
-func (u *Users) Connections() map[common.Address]chatbus.Connection {
+func (u *Users) Connections() map[common.Address]chatbus.UIConnection {
 	u.muUsers.RLock()
 	defer u.muUsers.RUnlock()
 
-	m := make(map[common.Address]chatbus.Connection)
+	m := make(map[common.Address]chatbus.UIConnection)
 	for id, usr := range u.users {
-		m[id] = chatbus.Connection{
-			Conn:     usr.Conn,
+		m[id] = chatbus.UIConnection{
+			Conn:     usr.UIConn,
 			LastPing: usr.LastPing,
 			LastPong: usr.LastPong,
 		}
@@ -115,13 +115,13 @@ func (u *Users) Connections() map[common.Address]chatbus.Connection {
 }
 
 // Retrieve retrieves a user from the storage.
-func (u *Users) Retrieve(ctx context.Context, userID common.Address) (chatbus.User, error) {
+func (u *Users) Retrieve(ctx context.Context, userID common.Address) (chatbus.UIUser, error) {
 	u.muUsers.RLock()
 	defer u.muUsers.RUnlock()
 
 	usr, exists := u.users[userID]
 	if !exists {
-		return chatbus.User{}, chatbus.ErrNotExists
+		return chatbus.UIUser{}, chatbus.ErrNotExists
 	}
 
 	return usr, nil

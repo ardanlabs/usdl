@@ -13,4 +13,5 @@ func Routes(app *web.App, log *logger.Logger, chatBus *chatbus.Business) {
 	api := newApp(log, chatBus)
 
 	app.HandlerFunc(http.MethodGet, "", "/connect", api.connect)
+	app.HandlerFunc(http.MethodPost, "", "/p2p", api.p2p)
 }

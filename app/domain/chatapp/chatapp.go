@@ -28,9 +28,13 @@ func (a *app) connect(ctx context.Context, r *http.Request) web.Encoder {
 	if err != nil {
 		return errs.Newf(errs.FailedPrecondition, "handshake failed: %s", err)
 	}
-	defer usr.Conn.Close()
+	defer usr.UIConn.Close()
 
 	a.chat.UIListen(ctx, usr)
 
 	return web.NewNoResponse()
+}
+
+func (a *app) p2p(ctx context.Context, r *http.Request) web.Encoder {
+	return nil
 }
