@@ -8,7 +8,7 @@ import (
 	"github.com/ardanlabs/usdl/api/clients/tui/ui"
 	"github.com/ardanlabs/usdl/foundation/agents/ollamallm"
 	"github.com/ardanlabs/usdl/foundation/client"
-	"github.com/ardanlabs/usdl/foundation/client/storage/dbfile"
+	"github.com/ardanlabs/usdl/foundation/client/storage/sql"
 )
 
 const (
@@ -29,7 +29,8 @@ func run() error {
 		return fmt.Errorf("id: %w", err)
 	}
 
-	db, err := dbfile.NewDB(configFilePath, id.MyAccountID)
+	// db, err := dbfile.NewDB(configFilePath, id.MyAccountID)
+	db, err := sql.NewDB(configFilePath, id.MyAccountID)
 	if err != nil {
 		return fmt.Errorf("config: %w", err)
 	}
