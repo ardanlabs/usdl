@@ -27,12 +27,12 @@ import (
 
 /*
 	CAP to CAP communication
-		- Add new client drop function to tcp package and extend out
-		- Finish the work on TCPClientManager
-			- Finish the Dial API saving the client to the new manager
-			- Line 146 of chatbus/ui.go and lookup the user in the new manager
-		- Add new route for establishing a p2p connection in app layer
-		- Wire in the double click to the TCP Client Manager.
+		- tcp: We need to add the DROP event and call that handler
+			- For both client and server
+			- Test it with the hack tooling
+		- tcpapp: We need to implment the handler functions
+		- chatapp: We need to add the p2p route
+		- client: Add client support for the double click
 		- Tailscale
 
 	Datafile transfer

@@ -108,12 +108,12 @@ func NewBusiness(cfg Config) (*Business, error) {
 	return &b, nil
 }
 
-// DialP2PConnection dials a P2P connection to the given address for a client
-// p2p connection. The address should be in the format "host:port".
-func (b *Business) DialP2PConnection(ctx context.Context, userID common.Address, network string, address string) error {
+// DialTCPConnection dials a tcp connection to the given address for a client
+// tcp connection. The address should be in the format "host:port".
+func (b *Business) DialTCPConnection(ctx context.Context, userID common.Address, network string, address string) error {
 	_, err := b.tcpCltMgr.Dial(ctx, userID.String(), network, address)
 	if err != nil {
-		return fmt.Errorf("dial p2p connection: %w", err)
+		return fmt.Errorf("dial tcp connection: %w", err)
 	}
 
 	return nil
