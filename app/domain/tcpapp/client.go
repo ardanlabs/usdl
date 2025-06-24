@@ -33,3 +33,8 @@ func (ClientHandlers) Read(clt *tcp.Client) ([]byte, int, error) {
 // Process processes the request from the client.
 func (ClientHandlers) Process(r *tcp.Request, clt *tcp.Client) {
 }
+
+// Drop is called when a connection is dropped.
+func (ch ClientHandlers) Drop(clt *tcp.Client) {
+	ch.log.Info(clt.Context(), "drop")
+}

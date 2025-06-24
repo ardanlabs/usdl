@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"net"
 	"time"
 )
@@ -70,7 +71,7 @@ type Request struct {
 
 // =============================================================================
 
-// Error provides support for multi client operations that might error.
+// Errors provides support for multi client operations that might error.
 type Errors []error
 
 // Error implments the error interface for CltError.
@@ -91,6 +92,7 @@ func (ers Errors) Error() string {
 type Handlers interface {
 	ConnHandler
 	ReqHandler
+	DropHandler
 }
 
 // ConnHandler is implemented by the user to bind the connection
@@ -117,4 +119,17 @@ type ReqHandler interface {
 
 	// Process is used to handle the processing of the request.
 	Process(r *Request, clt *Client)
+}
+
+type DropHandler interface {
+
+	// Drop is called when a connection is dropped.
+	Drop(clt *Client)
+}
+
+// =============================================================================
+
+func ipAddress(conn net.Conn) string {
+	tcpAddr := conn.RemoteAddr().(*net.TCPAddr)
+	return fmt.Sprintf("%s:%d", tcpAddr.IP.String(), tcpAddr.Port)
 }

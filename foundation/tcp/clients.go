@@ -38,11 +38,11 @@ func (clt *clients) copy() map[string]*Client {
 	return clients
 }
 
-func (clt *clients) add(client *Client) {
+func (clt *clients) add(userID string, client *Client) {
 	clt.clientsMu.Lock()
 	defer clt.clientsMu.Unlock()
 
-	clt.clients[client.ipAddress] = client
+	clt.clients[userID] = client
 }
 
 func (clt *clients) close(conn net.Conn) error {
@@ -62,13 +62,13 @@ func (clt *clients) close(conn net.Conn) error {
 	return nil
 }
 
-func (clt *clients) find(tcpAddr *net.TCPAddr) (*Client, error) {
+func (clt *clients) find(userID string) (*Client, error) {
 	clt.clientsMu.RLock()
 	defer clt.clientsMu.RUnlock()
 
-	c, exists := clt.clients[tcpAddr.String()]
+	c, exists := clt.clients[userID]
 	if !exists {
-		return nil, fmt.Errorf("IP[ %s ] : not found", tcpAddr.String())
+		return nil, fmt.Errorf("user[ %s ] : not found", userID)
 	}
 
 	return c, nil

@@ -4,7 +4,6 @@ import (
 	"context"
 	"io"
 	"net"
-	"strconv"
 	"sync"
 	"time"
 
@@ -36,6 +35,7 @@ type Client struct {
 	Reader    io.Reader
 	Writer    io.Writer
 	ctx       context.Context
+	userID    string
 	name      string
 	log       internalLogger
 	tcpAddr   *net.TCPAddr
@@ -50,6 +50,11 @@ type Client struct {
 	nWrites   int
 }
 
+// UserID returns the user ID for the client.
+func (clt *Client) UserID() string {
+	return clt.userID
+}
+
 // Context returns the context for the client.
 func (clt *Client) Context() context.Context {
 	return clt.ctx
@@ -61,7 +66,7 @@ func (clt *Client) TraceID() uuid.UUID {
 }
 
 // newClient creates a new client for an incoming connection.
-func newClient(name string, log internalLogger, clients *clients, handlers Handlers, conn net.Conn) *Client {
+func newClient(userID string, name string, log internalLogger, clients *clients, handlers Handlers, conn net.Conn) *Client {
 	now := time.Now().UTC()
 
 	// This will be a TCPAddr 100% of the time.
@@ -72,12 +77,13 @@ func newClient(name string, log internalLogger, clients *clients, handlers Handl
 		Reader:    conn,
 		Writer:    conn,
 		ctx:       setTraceID(context.Background(), uuid.New()),
+		userID:    userID,
 		name:      name,
 		log:       log,
 		tcpAddr:   raddr,
 		clients:   clients,
 		handlers:  handlers,
-		ipAddress: raddr.IP.String() + ":" + strconv.Itoa(raddr.Port),
+		ipAddress: ipAddress(conn),
 		isIPv6:    raddr.IP.To4() == nil,
 		timeConn:  now,
 		lastAct:   now,

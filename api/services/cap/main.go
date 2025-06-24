@@ -17,7 +17,7 @@ import (
 	"github.com/ardanlabs/usdl/app/domain/tcpapp"
 	"github.com/ardanlabs/usdl/app/sdk/mux"
 	"github.com/ardanlabs/usdl/business/domain/chatbus"
-	"github.com/ardanlabs/usdl/business/domain/chatbus/storage/usermem"
+	"github.com/ardanlabs/usdl/business/domain/chatbus/managers/uicltmgr"
 	"github.com/ardanlabs/usdl/foundation/logger"
 	"github.com/ardanlabs/usdl/foundation/tcp"
 	"github.com/ardanlabs/usdl/foundation/web"
@@ -214,8 +214,8 @@ func run(ctx context.Context, log *logger.Logger) error {
 	cfgBus := chatbus.Config{
 		Log:         log,
 		NATSConn:    nc,
-		UICltMgr:    usermem.New(log),
-		TCPCltMgr:   nil,
+		UICltMgr:    uicltmgr.New(log),
+		TCPCltMgr:   tcpCM,
 		NATSSubject: cfg.NATS.Subject,
 		CAPID:       capID,
 	}

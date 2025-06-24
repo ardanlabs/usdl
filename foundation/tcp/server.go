@@ -192,7 +192,7 @@ func (srv *Server) Listen() error {
 
 // CloseClient will close the client socket connection.
 func (srv *Server) CloseClient(tcpAddr *net.TCPAddr) error {
-	c, err := srv.clients.find(tcpAddr)
+	c, err := srv.clients.find(tcpAddr.IP.String())
 	if err != nil {
 		return fmt.Errorf("IP[ %s ] : disconnected", tcpAddr.String())
 	}
@@ -237,17 +237,17 @@ func (srv *Server) Groom(d time.Duration) {
 
 // startNewClient takes a new connection and adds it to the manager.
 func (srv *Server) startNewClient(conn net.Conn) {
-	tcpAddr := conn.RemoteAddr().(*net.TCPAddr)
+	userID := ipAddress(conn)
 
-	if _, err := srv.clients.find(tcpAddr); err == nil {
-		srv.log(srv.ctx, srv.name, EvtJoin, TypError, tcpAddr.IP.String(), "already connected")
+	if _, err := srv.clients.find(userID); err == nil {
+		srv.log(srv.ctx, srv.name, EvtJoin, TypError, userID, "already connected")
 		conn.Close()
 		return
 	}
 
-	c := newClient(srv.name, srv.log, srv.clients, srv.handlers, conn)
+	c := newClient(userID, srv.name, srv.log, srv.clients, srv.handlers, conn)
 
-	srv.clients.add(c)
+	srv.clients.add(userID, c)
 
 	c.start()
 }

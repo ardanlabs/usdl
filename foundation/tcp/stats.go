@@ -12,8 +12,8 @@ type Stat struct {
 }
 
 // ClientStats return details for all active clients.
-func (t *Server) ClientStats() []Stat {
-	clients := t.clients.copy()
+func (srv *Server) ClientStats() []Stat {
+	clients := srv.clients.copy()
 
 	stats := make([]Stat, 0, len(clients))
 

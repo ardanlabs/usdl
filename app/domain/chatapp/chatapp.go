@@ -36,5 +36,7 @@ func (a *app) connect(ctx context.Context, r *http.Request) web.Encoder {
 }
 
 func (a *app) p2p(ctx context.Context, r *http.Request) web.Encoder {
+	// CALL INTO THE CHATBUS TO DIAL A P2P CONNECTION
+	// a.chat.DialP2PConnection(ctx, userID, "tcp4", "localhost:8080")
 	return nil
 }

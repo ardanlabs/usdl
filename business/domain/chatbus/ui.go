@@ -143,12 +143,14 @@ func (b *Business) UIListen(ctx context.Context, from UIUser) {
 		// ---------------------------------------------------------------------
 		// Peer-to-Peer
 
-		// CHECK IF WE HAVE A P2P CONNECTION FOR THE USER?????
-		// _, err = b.tcpCltMgr.Retrieve(ctx, inMsg.ToID)
-		// if err == nil {
-		// 	// PERFORM P2P SEND
-		// 	continue
-		// }
+		clt, err := b.tcpCltMgr.Retrieve(ctx, inMsg.ToID.String())
+		if err == nil {
+			b.log.Info(ctx, "LOC: msg sent over tcp", "from", from.ID, "to", inMsg.ToID)
+
+			if err := b.tcpSendMessage(clt, from, inMsg); err != nil {
+				b.log.Info(ctx, "loc-tcp-send", "ERROR", err)
+			}
+		}
 
 		// ---------------------------------------------------------------------
 		// NATS

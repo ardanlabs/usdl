@@ -1,5 +1,5 @@
-// Package usermem provides a memory based user storage for the chatbus service.
-package usermem
+// Package uicltmgr provides a memory based user storage for the chatbus service.
+package uicltmgr
 
 import (
 	"context"
@@ -11,16 +11,16 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 )
 
-// Users provides user storage management.
-type Users struct {
+// UICltMgr provides user management for UI connections.
+type UICltMgr struct {
 	log     *logger.Logger
 	users   map[common.Address]chatbus.UIUser
 	muUsers sync.RWMutex
 }
 
-// New creates a new user storage.
-func New(log *logger.Logger) *Users {
-	u := Users{
+// New creates a new manager for UI connections.
+func New(log *logger.Logger) *UICltMgr {
+	u := UICltMgr{
 		log:   log,
 		users: make(map[common.Address]chatbus.UIUser),
 	}
@@ -29,7 +29,7 @@ func New(log *logger.Logger) *Users {
 }
 
 // Add adds a new user to the storage.
-func (u *Users) Add(ctx context.Context, usr chatbus.UIUser) error {
+func (u *UICltMgr) Add(ctx context.Context, usr chatbus.UIUser) error {
 	u.muUsers.Lock()
 	defer u.muUsers.Unlock()
 
@@ -45,7 +45,7 @@ func (u *Users) Add(ctx context.Context, usr chatbus.UIUser) error {
 }
 
 // UpdateLastPing updates a user value's ping date/time.
-func (u *Users) UpdateLastPing(ctx context.Context, userID common.Address) error {
+func (u *UICltMgr) UpdateLastPing(ctx context.Context, userID common.Address) error {
 	u.muUsers.Lock()
 	defer u.muUsers.Unlock()
 
@@ -63,7 +63,7 @@ func (u *Users) UpdateLastPing(ctx context.Context, userID common.Address) error
 }
 
 // UpdateLastPong updates a user value's pong date/time.
-func (u *Users) UpdateLastPong(ctx context.Context, userID common.Address) (chatbus.UIUser, error) {
+func (u *UICltMgr) UpdateLastPong(ctx context.Context, userID common.Address) (chatbus.UIUser, error) {
 	u.muUsers.Lock()
 	defer u.muUsers.Unlock()
 
@@ -81,7 +81,7 @@ func (u *Users) UpdateLastPong(ctx context.Context, userID common.Address) (chat
 }
 
 // Remove removes a user from the storage.
-func (u *Users) Remove(ctx context.Context, userID common.Address) {
+func (u *UICltMgr) Remove(ctx context.Context, userID common.Address) {
 	u.muUsers.Lock()
 	defer u.muUsers.Unlock()
 
@@ -98,7 +98,7 @@ func (u *Users) Remove(ctx context.Context, userID common.Address) {
 
 // Connections returns all the know users with their connections. A connection
 // that is not valid shouldn't be used.
-func (u *Users) Connections() map[common.Address]chatbus.UIConnection {
+func (u *UICltMgr) Connections() map[common.Address]chatbus.UIConnection {
 	u.muUsers.RLock()
 	defer u.muUsers.RUnlock()
 
@@ -115,7 +115,7 @@ func (u *Users) Connections() map[common.Address]chatbus.UIConnection {
 }
 
 // Retrieve retrieves a user from the storage.
-func (u *Users) Retrieve(ctx context.Context, userID common.Address) (chatbus.UIUser, error) {
+func (u *UICltMgr) Retrieve(ctx context.Context, userID common.Address) (chatbus.UIUser, error) {
 	u.muUsers.RLock()
 	defer u.muUsers.RUnlock()
 

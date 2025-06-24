@@ -118,7 +118,9 @@ func tcpClient(logger tcp.Logger) error {
 			fmt.Println(i, "***> Waiting for server to start...")
 			time.Sleep(300 * time.Millisecond)
 
-			clt, err := cm.Dial(context.TODO(), netType, addr)
+			userID := fmt.Sprintf("user-%d", i)
+
+			clt, err := cm.Dial(context.TODO(), userID, netType, addr)
 			if err != nil {
 				fmt.Println(i, "dialing a new TCP connection: %w", err)
 				return
@@ -187,6 +189,10 @@ func (tcpSrvHandlers) Process(r *tcp.Request, clt *tcp.Client) {
 	}
 }
 
+func (tcpSrvHandlers) Drop(clt *tcp.Client) {
+	fmt.Println("***> SERVER: CONNECTION CLOSED", "TRACEDID", clt.TraceID())
+}
+
 // =============================================================================
 
 type tcpCltHandlers struct{}
@@ -216,6 +222,10 @@ func (tcpCltHandlers) Process(r *tcp.Request, clt *tcp.Client) {
 	fmt.Println("***> CLIENT: SERVER MESSAGE:", "TRACEDID", clt.TraceID(), string(r.Data))
 
 	cltWG.Done()
+}
+
+func (tcpCltHandlers) Drop(clt *tcp.Client) {
+	fmt.Println("***> CLIENT: CONNECTION CLOSED", "TRACEDID", clt.TraceID())
 }
 
 // =============================================================================

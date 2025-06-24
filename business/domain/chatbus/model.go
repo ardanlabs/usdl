@@ -4,7 +4,6 @@ import (
 	"math/big"
 	"time"
 
-	"github.com/ardanlabs/usdl/foundation/tcp"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
@@ -24,13 +23,6 @@ type UIConnection struct {
 	Conn     *websocket.Conn
 	LastPing time.Time
 	LastPong time.Time
-}
-
-// TCPUser represents a tcp p2p user in the chat system.
-type TCPUser struct {
-	ID     common.Address `json:"id"`
-	Name   string         `json:"name"`
-	Client *tcp.Client    `json:"-"`
 }
 
 type uiIncomingMessage struct {

@@ -43,3 +43,7 @@ func (tcpHandlers) Process(r *tcp.Request, clt *tcp.Client) {
 	d := int64(time.Since(r.ReadAt))
 	atomic.StoreInt64(&dur, d)
 }
+
+func (tcpHandlers) Drop(clt *tcp.Client) {
+	fmt.Println("***> SERVER: CONNECTION CLOSED")
+}

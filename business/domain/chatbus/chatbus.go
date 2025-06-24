@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/ardanlabs/usdl/foundation/logger"
+	"github.com/ardanlabs/usdl/foundation/tcp"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
@@ -34,9 +35,8 @@ type UIClientManager interface {
 
 // TCPClientManager defines the set of behavior for user management.
 type TCPClientManager interface {
-	Dial(ctx context.Context, userID common.Address, network string, address string) (TCPUser, error)
-	Drop(ctx context.Context, userID common.Address)
-	Retrieve(ctx context.Context, userID common.Address) (TCPUser, error)
+	Dial(ctx context.Context, userID string, network string, address string) (*tcp.Client, error)
+	Retrieve(ctx context.Context, userID string) (*tcp.Client, error)
 }
 
 type Config struct {
@@ -110,8 +110,8 @@ func NewBusiness(cfg Config) (*Business, error) {
 
 // DialP2PConnection dials a P2P connection to the given address for a client
 // p2p connection. The address should be in the format "host:port".
-func (b *Business) DialP2PConnection(ctx context.Context, userID common.Address, address string) error {
-	_, err := b.tcpCltMgr.Dial(ctx, userID, "tcp4", address)
+func (b *Business) DialP2PConnection(ctx context.Context, userID common.Address, network string, address string) error {
+	_, err := b.tcpCltMgr.Dial(ctx, userID.String(), network, address)
 	if err != nil {
 		return fmt.Errorf("dial p2p connection: %w", err)
 	}
