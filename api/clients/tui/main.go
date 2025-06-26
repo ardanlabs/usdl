@@ -12,7 +12,7 @@ import (
 )
 
 const (
-	url            = "ws://localhost:3000"
+	url            = "localhost:3000"
 	configFilePath = "zarf/client"
 )
 

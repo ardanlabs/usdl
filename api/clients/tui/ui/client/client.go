@@ -124,7 +124,7 @@ func (app *App) Run() error {
 }
 
 func (app *App) Handshake(acct MyAccount) error {
-	url := fmt.Sprintf("%s/connect", app.url)
+	url := fmt.Sprintf("ws://%s/connect", app.url)
 
 	conn, _, err := websocket.DefaultDialer.Dial(url, nil)
 	if err != nil {
@@ -404,7 +404,7 @@ func (app *App) EstablishTCPConnection(ctx context.Context, to common.Address) e
 		return fmt.Errorf("encoding error: %w", err)
 	}
 
-	url := fmt.Sprintf("%s/tcpconnect", app.url)
+	url := fmt.Sprintf("http://%s/tcpconnect", app.url)
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, &b)
 	if err != nil {
