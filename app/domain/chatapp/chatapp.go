@@ -47,7 +47,7 @@ func (a *app) tcpConnect(ctx context.Context, r *http.Request) web.Encoder {
 	userID := common.HexToAddress(tcpConnReq.UserID)
 
 	if err := a.chat.DialTCPConnection(ctx, userID, "tcp4", tcpConnReq.TCPHost); err != nil {
-		return errs.Newf(errs.InternalOnlyLog, "failed to dial tcp connection: %s", err)
+		return errs.Newf(errs.Internal, "failed to dial tcp connection: %s", err)
 	}
 
 	return nil
