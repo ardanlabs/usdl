@@ -26,12 +26,9 @@ import (
 
 /*
 	CAP to CAP communication
-		- tcp: We need to add the DROP event and call that handler
-			- For both client and server
-			- Test it with the hack tooling
-		- tcpapp: We need to implment the handler functions
-		- chatapp: We need to add the p2p route
-		- client: Add client support for the double click
+		- tcp: Why can't we establish a connection both ways.
+		- fix ui coloring issue with connections
+		- final testing
 		- Tailscale
 
 	Datafile transfer
@@ -181,7 +178,7 @@ func run(ctx context.Context, log *logger.Logger) error {
 	tcpErrors := make(chan error, 1)
 
 	go func() {
-		log.Info(ctx, "TCP", "status", "starting TCP server")
+		log.Info(ctx, "TCP", "status", "starting TCP server", "addr", cfg.TCP.Addr)
 		tcpErrors <- tcpSrv.Listen()
 	}()
 
