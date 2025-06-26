@@ -408,7 +408,7 @@ func (app *App) EstablishTCPConnection(ctx context.Context, to common.Address) e
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, &b)
 	if err != nil {
-		return fmt.Errorf("create request error: %w", err)
+		return fmt.Errorf("create request error: %s: %w", url, err)
 	}
 
 	req.Header.Set("Cache-Control", "no-cache")
