@@ -9,9 +9,9 @@ import (
 )
 
 // Routes adds specific routes for this group.
-func Routes(app *web.App, log *logger.Logger, chatBus *chatbus.Business) {
-	api := newApp(log, chatBus)
+func Routes(app *web.App, log *logger.Logger, chatBus *chatbus.Business, serverAddr string) {
+	api := newApp(log, chatBus, serverAddr)
 
 	app.HandlerFunc(http.MethodGet, "", "/connect", api.connect)
-	app.HandlerFunc(http.MethodPost, "", "/p2p", api.p2p)
+	app.HandlerFunc(http.MethodPost, "", "/tcpconnect", api.tcpConnect)
 }

@@ -14,7 +14,6 @@ import (
 	"time"
 
 	"github.com/ardanlabs/conf/v3"
-	"github.com/ardanlabs/usdl/app/domain/tcpapp"
 	"github.com/ardanlabs/usdl/app/sdk/mux"
 	"github.com/ardanlabs/usdl/business/domain/chatbus"
 	"github.com/ardanlabs/usdl/business/domain/chatbus/managers/uicltmgr"
@@ -152,6 +151,11 @@ func run(ctx context.Context, log *logger.Logger) error {
 	log.Info(ctx, "startup", "status", "getting cap", "capID", capID)
 
 	// -------------------------------------------------------------------------
+	// UI Client Manager
+
+	uiCltMgr := uicltmgr.New(log)
+
+	// -------------------------------------------------------------------------
 	// TCP Server
 
 	tcpSrvLogger := func(ctx context.Context, name string, evt string, typ string, ipAddress string, format string, a ...any) {
@@ -161,7 +165,7 @@ func run(ctx context.Context, log *logger.Logger) error {
 	tcpSrvCfg := tcp.ServerConfig{
 		NetType:  cfg.TCP.NetType,
 		Addr:     cfg.TCP.Addr,
-		Handlers: tcpapp.NewServerHandlers(log),
+		Handlers: chatbus.NewServerHandlers(log, uiCltMgr),
 		Logger:   tcpSrvLogger,
 	}
 
@@ -189,7 +193,7 @@ func run(ctx context.Context, log *logger.Logger) error {
 	}
 
 	cfgCltCfg := tcp.ClientConfig{
-		Handlers: tcpapp.NewClientHandlers(log),
+		Handlers: chatbus.NewClientHandlers(log),
 		Logger:   tcpCltLogger,
 	}
 
@@ -214,7 +218,7 @@ func run(ctx context.Context, log *logger.Logger) error {
 	cfgBus := chatbus.Config{
 		Log:         log,
 		NATSConn:    nc,
-		UICltMgr:    uicltmgr.New(log),
+		UICltMgr:    uiCltMgr,
 		TCPCltMgr:   tcpCM,
 		NATSSubject: cfg.NATS.Subject,
 		CAPID:       capID,
@@ -234,8 +238,9 @@ func run(ctx context.Context, log *logger.Logger) error {
 	signal.Notify(shutdown, syscall.SIGINT, syscall.SIGTERM)
 
 	cfgMux := mux.Config{
-		Log:     log,
-		ChatBus: chatBus,
+		Log:        log,
+		ChatBus:    chatBus,
+		ServerAddr: cfg.TCP.Addr,
 	}
 
 	webAPI := mux.WebAPI(cfgMux)

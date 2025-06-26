@@ -14,8 +14,9 @@ import (
 
 // Config contains all the mandatory systems required by handlers.
 type Config struct {
-	Log     *logger.Logger
-	ChatBus *chatbus.Business
+	Log        *logger.Logger
+	ChatBus    *chatbus.Business
+	ServerAddr string
 }
 
 // WebAPI constructs a http.Handler with all application routes bound.
@@ -31,7 +32,7 @@ func WebAPI(cfg Config) http.Handler {
 		mid.Panics(),
 	)
 
-	chatapp.Routes(app, cfg.Log, cfg.ChatBus)
+	chatapp.Routes(app, cfg.Log, cfg.ChatBus, cfg.ServerAddr)
 
 	return app
 }

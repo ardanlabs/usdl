@@ -6,13 +6,13 @@ import (
 	"os"
 
 	"github.com/ardanlabs/usdl/api/clients/tui/ui"
+	"github.com/ardanlabs/usdl/api/clients/tui/ui/client"
+	"github.com/ardanlabs/usdl/api/clients/tui/ui/client/storage/dbfile"
 	"github.com/ardanlabs/usdl/foundation/agents/ollamallm"
-	"github.com/ardanlabs/usdl/foundation/client"
-	"github.com/ardanlabs/usdl/foundation/client/storage/dbfile"
 )
 
 const (
-	url            = "ws://localhost:3000/connect"
+	url            = "ws://localhost:3000"
 	configFilePath = "zarf/client"
 )
 

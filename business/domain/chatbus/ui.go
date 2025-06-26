@@ -129,7 +129,7 @@ func (b *Business) UIListen(ctx context.Context, from UIUser) {
 		if err == nil {
 			b.log.Info(ctx, "LOC: msg sent over web socket", "from", from.ID, "to", inMsg.ToID)
 
-			if err := b.uiSendMessage(from, uiTo, inMsg.FromNonce, inMsg.Encrypted, inMsg.Msg); err != nil {
+			if err := uiSendMessage(from, uiTo, inMsg.FromNonce, inMsg.Encrypted, inMsg.Msg); err != nil {
 				b.log.Info(ctx, "loc-send", "ERROR", err)
 			}
 
@@ -141,7 +141,7 @@ func (b *Business) UIListen(ctx context.Context, from UIUser) {
 		}
 
 		// ---------------------------------------------------------------------
-		// Peer-to-Peer
+		// TCP
 
 		clt, err := b.tcpCltMgr.Retrieve(ctx, inMsg.ToID.String())
 		if err == nil {
@@ -202,24 +202,6 @@ func (b *Business) uiReadMessage(ctx context.Context, usr UIUser) ([]byte, error
 	return resp.msg, nil
 }
 
-func (b *Business) uiSendMessage(from UIUser, to UIUser, fromNonce uint64, encrypted bool, msg [][]byte) error {
-	m := uiOutgoingMessage{
-		From: uiOutgoingUser{
-			ID:    from.ID,
-			Name:  from.Name,
-			Nonce: fromNonce,
-		},
-		Encrypted: encrypted,
-		Msg:       msg,
-	}
-
-	if err := to.UIConn.WriteJSON(m); err != nil {
-		return fmt.Errorf("write message: %w", err)
-	}
-
-	return nil
-}
-
 func (b *Business) uiPing(maxWait time.Duration) {
 	ticker := time.NewTicker(maxWait)
 
@@ -275,4 +257,24 @@ func (b *Business) uiPong(id common.Address) func(appData string) error {
 	}
 
 	return f
+}
+
+// =============================================================================
+
+func uiSendMessage(from UIUser, to UIUser, fromNonce uint64, encrypted bool, msg [][]byte) error {
+	m := uiOutgoingMessage{
+		From: uiOutgoingUser{
+			ID:    from.ID,
+			Name:  from.Name,
+			Nonce: fromNonce,
+		},
+		Encrypted: encrypted,
+		Msg:       msg,
+	}
+
+	if err := to.UIConn.WriteJSON(m); err != nil {
+		return fmt.Errorf("write message: %w", err)
+	}
+
+	return nil
 }

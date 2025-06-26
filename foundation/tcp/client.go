@@ -118,6 +118,9 @@ func (clt *Client) read() {
 
 	defer func() {
 		clt.log(clt.ctx, clt.name, EvtDrop, TypInfo, clt.ipAddress, "client G disconnected")
+
+		clt.handlers.Drop(clt)
+
 		if err := clt.clients.close(clt.Conn); err != nil {
 			clt.log(clt.ctx, clt.name, EvtDrop, TypError, clt.ipAddress, "error closing client: %s", err)
 		}

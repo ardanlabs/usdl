@@ -57,15 +57,6 @@ run-tui:
 run-tui-ai:
 	go run api/clients/tui/main.go --aimode=true
 
-run-datastar:
-	templ generate app/domain/datastarapp/
-	go run api/services/datastar/main.go
-
-run-datastar-reload:
-	find . -name "*.go" -o -name "*.html" -o -name "*.css" | entr -r go run api/services/datastar/main.go & \
-	find . -name "*.templ" | entr -r templ generate app/domain/datastarapp/ & \
-	wait;
-
 chat-test:
 	curl -i -X GET http://localhost:3000/test
 

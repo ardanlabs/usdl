@@ -55,14 +55,14 @@ func (b *Business) natsReadMessage() func(msg jetstream.Msg) {
 		// If the user is found, send the message directly to the user.
 		to, err := b.uiCltMgr.Retrieve(ctx, natsMsg.ToID)
 		if err == nil {
-			b.log.Info(ctx, "BUS: msg sent over web socket", "from", natsMsg.FromID, "to", natsMsg.ToID)
+			b.log.Info(ctx, "NATS: msg sent over web socket", "from", natsMsg.FromID, "to", natsMsg.ToID)
 
 			from := UIUser{
 				ID:   natsMsg.FromID,
 				Name: natsMsg.FromName,
 			}
 
-			if err := b.uiSendMessage(from, to, natsMsg.FromNonce, natsMsg.Encrypted, natsMsg.Msg); err != nil {
+			if err := uiSendMessage(from, to, natsMsg.FromNonce, natsMsg.Encrypted, natsMsg.Msg); err != nil {
 				b.log.Info(ctx, "nats-send", "ERROR", err)
 			}
 

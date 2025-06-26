@@ -9,17 +9,20 @@ import (
 	"github.com/ardanlabs/usdl/business/domain/chatbus"
 	"github.com/ardanlabs/usdl/foundation/logger"
 	"github.com/ardanlabs/usdl/foundation/web"
+	"github.com/ethereum/go-ethereum/common"
 )
 
 type app struct {
-	log  *logger.Logger
-	chat *chatbus.Business
+	log        *logger.Logger
+	chat       *chatbus.Business
+	serverAddr string
 }
 
-func newApp(log *logger.Logger, chat *chatbus.Business) *app {
+func newApp(log *logger.Logger, chat *chatbus.Business, serverAddr string) *app {
 	return &app{
-		log:  log,
-		chat: chat,
+		log:        log,
+		chat:       chat,
+		serverAddr: serverAddr,
 	}
 }
 
@@ -35,9 +38,17 @@ func (a *app) connect(ctx context.Context, r *http.Request) web.Encoder {
 	return web.NewNoResponse()
 }
 
-func (a *app) p2p(ctx context.Context, r *http.Request) web.Encoder {
-	// WE NEED A DATA MODEL WITH USER INFORMATION
-	// a.chat.DialTCPConnection(ctx, userID, "tcp4", "localhost:8080")
+func (a *app) tcpConnect(ctx context.Context, r *http.Request) web.Encoder {
+	var tcpConnReq tcpConnRequest
+	if err := web.Decode(r, &tcpConnReq); err != nil {
+		return errs.Newf(errs.InvalidArgument, "invalid request: %s", err)
+	}
+
+	userID := common.HexToAddress(tcpConnReq.UserID)
+
+	if err := a.chat.DialTCPConnection(ctx, userID, "tcp4", tcpConnReq.TCPHost); err != nil {
+		return errs.Newf(errs.InternalOnlyLog, "failed to dial tcp connection: %s", err)
+	}
 
 	return nil
 }

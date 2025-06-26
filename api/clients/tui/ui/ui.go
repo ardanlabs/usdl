@@ -8,8 +8,8 @@ import (
 	"math/rand/v2"
 	"time"
 
+	"github.com/ardanlabs/usdl/api/clients/tui/ui/client"
 	"github.com/ardanlabs/usdl/foundation/agents/ollamallm"
-	"github.com/ardanlabs/usdl/foundation/client"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/gdamore/tcell/v2"
 	"github.com/rivo/tview"
@@ -344,8 +344,17 @@ func (ui *TUI) aiToggleHandler(agent bool) {
 
 func (ui *TUI) establishUserConnection() {
 	idx := ui.list.GetCurrentItem()
-	name, _ := ui.list.GetItemText(idx)
+	name, currentID := ui.list.GetItemText(idx)
 
 	fmt.Fprintln(ui.textView, "-----")
-	fmt.Fprintf(ui.textView, "Establishing Peer Connection with %s ...", name)
+	fmt.Fprintf(ui.textView, "Establishing Peer Connection with %s : %s ...", name, currentID)
+
+	if err := ui.app.EstablishTCPConnection(context.Background(), common.HexToAddress(currentID)); err != nil {
+		fmt.Fprintln(ui.textView, "-----")
+		fmt.Fprintf(ui.textView, "Failed to establish TCP connection: %s\n", err)
+		return
+	}
+
+	fmt.Fprintln(ui.textView, "-----")
+	fmt.Fprintln(ui.textView, "TCP connection established")
 }
