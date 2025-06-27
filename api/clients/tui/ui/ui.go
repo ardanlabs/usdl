@@ -347,7 +347,7 @@ func (ui *TUI) establishUserConnection() {
 	name, currentID := ui.list.GetItemText(idx)
 
 	fmt.Fprintln(ui.textView, "-----")
-	fmt.Fprintf(ui.textView, "Establishing Peer Connection with %s : %s ...", name, currentID)
+	fmt.Fprintf(ui.textView, "Establishing Peer Connection with %s\n", name)
 
 	if err := ui.app.EstablishTCPConnection(context.Background(), common.HexToAddress(currentID)); err != nil {
 		fmt.Fprintln(ui.textView, "-----")
