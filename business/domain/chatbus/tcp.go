@@ -82,7 +82,6 @@ func (sh ServerHandlers) Read(clt *tcp.Client) ([]byte, int, error) {
 	bufReader := clt.Reader.(*bufio.Reader)
 
 	clt.Conn.SetReadDeadline(time.Now().Add(5 * time.Second))
-	sh.log.Info(clt.Context(), "server-read", "status", "waiting")
 
 	line, err := bufReader.ReadString('\n')
 	if err != nil {

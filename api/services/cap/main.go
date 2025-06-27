@@ -26,8 +26,8 @@ import (
 
 /*
 	CAP to CAP communication
-		- tcp: Why can't we establish a connection both ways.
-		- fix ui coloring issue with connections
+		- fix: When client tcp drops the cap is still tring to use tcp.
+		- fix ui coloring issue with connections and drops
 		- final testing
 		- Tailscale
 
