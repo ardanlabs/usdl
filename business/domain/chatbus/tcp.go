@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/ardanlabs/usdl/foundation/logger"
 	"github.com/ardanlabs/usdl/foundation/signature"
@@ -26,21 +27,31 @@ func NewClientHandlers(log *logger.Logger) *ClientHandlers {
 
 // Bind binds the client to the server handlers.
 func (ch ClientHandlers) Bind(clt *tcp.Client) {
-	ch.log.Info(clt.Context(), "bind", "userID", clt.UserID())
+	ch.log.Info(clt.Context(), "client-bind", "userID", clt.UserID())
+
+	clt.Reader = bufio.NewReader(clt.Conn)
 }
 
 // Read reads data from the client connection.
-func (ClientHandlers) Read(clt *tcp.Client) ([]byte, int, error) {
-	return nil, 0, fmt.Errorf("not implemented")
+func (ch ClientHandlers) Read(clt *tcp.Client) ([]byte, int, error) {
+	bufReader := clt.Reader.(*bufio.Reader)
+
+	clt.Conn.SetReadDeadline(time.Now().Add(5 * time.Second))
+	line, err := bufReader.ReadString('\n')
+	if err != nil {
+		return nil, 0, err
+	}
+
+	return []byte(line), len(line), nil
 }
 
 // Process processes the request from the client.
-func (ClientHandlers) Process(r *tcp.Request, clt *tcp.Client) {
+func (ch ClientHandlers) Process(r *tcp.Request, clt *tcp.Client) {
 }
 
 // Drop is called when a connection is dropped.
 func (ch ClientHandlers) Drop(clt *tcp.Client) {
-	ch.log.Info(clt.Context(), "drop", "userID", clt.UserID())
+	ch.log.Info(clt.Context(), "client-drop", "userID", clt.UserID())
 }
 
 // =============================================================================
@@ -61,14 +72,17 @@ func NewServerHandlers(log *logger.Logger, uiCltMgr UIClientManager) *ServerHand
 
 // Bind binds the client to the server handlers.
 func (sh ServerHandlers) Bind(clt *tcp.Client) {
-	sh.log.Info(clt.Context(), "bind", "userID", clt.UserID())
+	sh.log.Info(clt.Context(), "server-bind", "userID", clt.UserID())
 
 	clt.Reader = bufio.NewReader(clt.Conn)
 }
 
 // Read reads data from the client connection.
-func (ServerHandlers) Read(clt *tcp.Client) ([]byte, int, error) {
+func (sh ServerHandlers) Read(clt *tcp.Client) ([]byte, int, error) {
 	bufReader := clt.Reader.(*bufio.Reader)
+
+	clt.Conn.SetReadDeadline(time.Now().Add(5 * time.Second))
+	sh.log.Info(clt.Context(), "server-read", "status", "waiting")
 
 	line, err := bufReader.ReadString('\n')
 	if err != nil {
@@ -84,11 +98,11 @@ func (sh ServerHandlers) Process(r *tcp.Request, clt *tcp.Client) {
 
 	var natsMsg natsInOutMessage
 	if err := json.Unmarshal(r.Data, &natsMsg); err != nil {
-		sh.log.Info(ctx, "tcp-unmarshal", "ERROR", err)
+		sh.log.Info(ctx, "server-process: unmarshal", "ERROR", err)
 		return
 	}
 
-	sh.log.Info(ctx, "TCP: msg recv", "fromNonce", natsMsg.FromNonce, "from", natsMsg.FromID, "to", natsMsg.ToID, "encrypted", natsMsg.Encrypted, "message", natsMsg.Msg, "fromName", natsMsg.FromName)
+	sh.log.Info(ctx, "server-process: msg recv", "fromNonce", natsMsg.FromNonce, "from", natsMsg.FromID, "to", natsMsg.ToID, "encrypted", natsMsg.Encrypted, "message", natsMsg.Msg, "fromName", natsMsg.FromName)
 
 	dataThatWasSign := struct {
 		ToID      common.Address
@@ -102,19 +116,19 @@ func (sh ServerHandlers) Process(r *tcp.Request, clt *tcp.Client) {
 
 	id, err := signature.FromAddress(dataThatWasSign, natsMsg.V, natsMsg.R, natsMsg.S)
 	if err != nil {
-		sh.log.Info(ctx, "tcp-fromAddress", "ERROR", err)
+		sh.log.Info(ctx, "server-process: fromAddress", "ERROR", err)
 		return
 	}
 
 	if id != natsMsg.FromID.Hex() {
-		sh.log.Info(r.Context, "tcp-signature check", "status", "signature does not match")
+		sh.log.Info(r.Context, "server-process: signature check", "status", "signature does not match")
 		return
 	}
 
 	// If the user is found, send the message directly to the user.
 	to, err := sh.uiCltMgr.Retrieve(ctx, natsMsg.ToID)
 	if err == nil {
-		sh.log.Info(ctx, "TCP: msg sent over web socket", "from", natsMsg.FromID, "to", natsMsg.ToID)
+		sh.log.Info(ctx, "server-process: msg sent over web socket", "from", natsMsg.FromID, "to", natsMsg.ToID)
 
 		from := UIUser{
 			ID:   natsMsg.FromID,
@@ -122,25 +136,25 @@ func (sh ServerHandlers) Process(r *tcp.Request, clt *tcp.Client) {
 		}
 
 		if err := uiSendMessage(from, to, natsMsg.FromNonce, natsMsg.Encrypted, natsMsg.Msg); err != nil {
-			sh.log.Info(ctx, "tcp-send", "ERROR", err)
+			sh.log.Info(ctx, "server-process: send", "ERROR", err)
 		}
 
 		return
 	}
 
 	if !errors.Is(err, ErrNotExists) {
-		sh.log.Info(ctx, "tcp-retrieve", "ERROR", err)
+		sh.log.Info(ctx, "server-process: retrieve", "ERROR", err)
 	}
 
 	// We don't have a web socket connection for the user then drop the
 	// message on the floor because we can't deliver it.
 
-	sh.log.Info(ctx, "tcp-retrieve", "status", "user not found")
+	sh.log.Info(ctx, "server-process: retrieve", "status", "user not found")
 }
 
 // Drop is called when a connection is dropped.
 func (sh ServerHandlers) Drop(clt *tcp.Client) {
-	sh.log.Info(clt.Context(), "drop", "userID", clt.UserID())
+	sh.log.Info(clt.Context(), "server-drop", "userID", clt.UserID())
 }
 
 // =============================================================================
