@@ -150,6 +150,8 @@ func (b *Business) UIListen(ctx context.Context, from UIUser) {
 			if err := b.tcpSendMessage(clt, from, inMsg); err != nil {
 				b.log.Info(ctx, "loc-tcp-send", "ERROR", err)
 			}
+
+			continue
 		}
 
 		// ---------------------------------------------------------------------
