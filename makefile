@@ -14,6 +14,15 @@ docker:
 	docker pull dyrnq/open-webui:main
 
 # ==============================================================================
+# Tailscale
+
+tailscale-up:
+	tailscale serve --bg --tcp 4001 4000
+
+tailscale-down:
+	tailscale serve --tcp 4001 off
+
+# ==============================================================================
 # Ollama
 
 ollama-up:
