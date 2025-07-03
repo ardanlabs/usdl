@@ -349,7 +349,7 @@ func (ui *TUI) establishUserConnection() {
 	fmt.Fprintln(ui.textView, "-----")
 	fmt.Fprintf(ui.textView, "Establishing Peer Connection with %s\n", name)
 
-	if err := ui.app.EstablishTCPConnection(context.Background(), common.HexToAddress(currentID)); err != nil {
+	if err := ui.app.EstablishTCPConnection(context.Background(), ui.app.ID(), common.HexToAddress(currentID)); err != nil {
 		fmt.Fprintln(ui.textView, "-----")
 		fmt.Fprintf(ui.textView, "Failed to establish TCP connection: %s\n", err)
 		return

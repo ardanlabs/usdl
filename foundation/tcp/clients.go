@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"maps"
-	"net"
 	"sync"
 )
 
@@ -45,19 +44,16 @@ func (clt *clients) add(userID string, client *Client) {
 	clt.clients[userID] = client
 }
 
-func (clt *clients) close(conn net.Conn) error {
+func (clt *clients) close(userID string) error {
 	clt.clientsMu.Lock()
 	defer clt.clientsMu.Unlock()
 
-	ipAddress := conn.RemoteAddr().String()
-
-	if _, exists := clt.clients[ipAddress]; !exists {
+	_, exists := clt.clients[userID]
+	if !exists {
 		return errors.New("already removed")
 	}
 
-	delete(clt.clients, ipAddress)
-
-	conn.Close()
+	delete(clt.clients, userID)
 
 	return nil
 }

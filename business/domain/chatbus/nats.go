@@ -21,7 +21,7 @@ func (b *Business) natsReadMessage() func(msg jetstream.Msg) {
 
 		var natsMsg natsInOutMessage
 		if err := json.Unmarshal(msg.Data(), &natsMsg); err != nil {
-			b.log.Info(ctx, "nats-unmarshal", "ERROR", err)
+			b.log.Info(ctx, "natsreadmessage: unmarshal", "ERROR", err)
 			return
 		}
 
@@ -29,7 +29,7 @@ func (b *Business) natsReadMessage() func(msg jetstream.Msg) {
 			return
 		}
 
-		b.log.Info(ctx, "BUS: msg recv", "fromNonce", natsMsg.FromNonce, "from", natsMsg.FromID, "to", natsMsg.ToID, "encrypted", natsMsg.Encrypted, "message", natsMsg.Msg, "fromName", natsMsg.FromName)
+		b.log.Info(ctx, "natsreadmessage: msg recv", "fromNonce", natsMsg.FromNonce, "from", natsMsg.FromID, "to", natsMsg.ToID, "encrypted", natsMsg.Encrypted, "message", natsMsg.Msg, "fromName", natsMsg.FromName)
 
 		dataThatWasSign := struct {
 			ToID      common.Address
@@ -43,19 +43,19 @@ func (b *Business) natsReadMessage() func(msg jetstream.Msg) {
 
 		id, err := signature.FromAddress(dataThatWasSign, natsMsg.V, natsMsg.R, natsMsg.S)
 		if err != nil {
-			b.log.Info(ctx, "nats-fromAddress", "ERROR", err)
+			b.log.Info(ctx, "natsreadmessage: fromAddress", "ERROR", err)
 			return
 		}
 
 		if id != natsMsg.FromID.Hex() {
-			b.log.Info(ctx, "nats-signature check", "status", "signature does not match")
+			b.log.Info(ctx, "natsreadmessage: signature check", "status", "signature does not match")
 			return
 		}
 
 		// If the user is found, send the message directly to the user.
 		to, err := b.uiCltMgr.Retrieve(ctx, natsMsg.ToID)
 		if err == nil {
-			b.log.Info(ctx, "NATS: msg sent over web socket", "from", natsMsg.FromID, "to", natsMsg.ToID)
+			b.log.Info(ctx, "natsreadmessage: msg sent over web socket", "from", natsMsg.FromID, "to", natsMsg.ToID)
 
 			from := UIUser{
 				ID:   natsMsg.FromID,
@@ -63,20 +63,20 @@ func (b *Business) natsReadMessage() func(msg jetstream.Msg) {
 			}
 
 			if err := uiSendMessage(from, to, natsMsg.FromNonce, natsMsg.Encrypted, natsMsg.Msg); err != nil {
-				b.log.Info(ctx, "nats-send", "ERROR", err)
+				b.log.Info(ctx, "natsreadmessage: send", "ERROR", err)
 			}
 
 			return
 		}
 
 		if !errors.Is(err, ErrNotExists) {
-			b.log.Info(ctx, "nats-retrieve", "ERROR", err)
+			b.log.Info(ctx, "natsreadmessage: retrieve", "ERROR", err)
 		}
 
 		// We don't have a web socket connection for the user then drop the
 		// message on the floor because we can't deliver it.
 
-		b.log.Info(ctx, "nats-retrieve", "status", "user not found")
+		b.log.Info(ctx, "natsreadmessage: retrieve", "status", "user not found")
 	}
 
 	return f

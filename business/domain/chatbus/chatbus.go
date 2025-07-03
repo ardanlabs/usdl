@@ -3,16 +3,14 @@ package chatbus
 
 import (
 	"context"
-	"errors"
 	"fmt"
-	"net"
+	"sync"
 	"time"
 
 	"github.com/ardanlabs/usdl/foundation/logger"
 	"github.com/ardanlabs/usdl/foundation/tcp"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/google/uuid"
-	"github.com/gorilla/websocket"
 	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nats.go/jetstream"
 )
@@ -50,14 +48,16 @@ type Config struct {
 
 // Business represents a chat support.
 type Business struct {
-	log         *logger.Logger
-	js          jetstream.JetStream
-	stream      jetstream.Stream
-	consumer    jetstream.Consumer
-	capID       uuid.UUID
-	natsSubject string
-	uiCltMgr    UIClientManager
-	tcpCltMgr   TCPClientManager
+	log          *logger.Logger
+	js           jetstream.JetStream
+	stream       jetstream.Stream
+	consumer     jetstream.Consumer
+	capID        uuid.UUID
+	natsSubject  string
+	uiCltMgr     UIClientManager
+	tcpCltMgr    TCPClientManager
+	tcpConnMap   map[common.Address][]common.Address
+	tcpConnMapMu sync.Mutex
 }
 
 // NewBusiness creates a new chat support.
@@ -98,6 +98,7 @@ func NewBusiness(cfg Config) (*Business, error) {
 		natsSubject: cfg.NATSSubject,
 		uiCltMgr:    cfg.UICltMgr,
 		tcpCltMgr:   cfg.TCPCltMgr,
+		tcpConnMap:  make(map[common.Address][]common.Address),
 	}
 
 	c1.Consume(b.natsReadMessage(), jetstream.PullMaxMessages(1))
@@ -110,42 +111,55 @@ func NewBusiness(cfg Config) (*Business, error) {
 
 // DialTCPConnection dials a tcp connection to the given address for a client
 // tcp connection. The address should be in the format "host:port".
-func (b *Business) DialTCPConnection(ctx context.Context, userID common.Address, network string, address string) error {
-	_, err := b.tcpCltMgr.Dial(ctx, userID.String(), network, address)
+func (b *Business) DialTCPConnection(ctx context.Context, tuiUserID common.Address, clientUserID common.Address, network string, address string) error {
+	b.log.Info(ctx, "dial-tcp-connection", "tuiUserID", tuiUserID, "clientUserID", clientUserID, "network", network, "address", address)
+
+	_, err := b.tcpCltMgr.Dial(ctx, clientUserID.String(), network, address)
 	if err != nil {
 		return fmt.Errorf("dial tcp connection: %w", err)
 	}
+
+	b.addTCPConnection(tuiUserID, clientUserID)
+
+	return nil
+}
+
+// DropTCPConnection drops a tcp connection for a client.
+func (b *Business) DropTCPConnection(ctx context.Context, tuiUserID common.Address) error {
+	b.log.Info(ctx, "drop-tcp-connection", "tuiUserID", tuiUserID)
+
+	b.removeTCPConnection(ctx, tuiUserID)
 
 	return nil
 }
 
 // =============================================================================
 
-func (b *Business) isCriticalError(ctx context.Context, err error) bool {
-	switch e := err.(type) {
-	case *websocket.CloseError:
-		b.log.Info(ctx, "chat-isCriticalError", "status", "client disconnected")
-		return true
+func (b *Business) addTCPConnection(tuiUserID common.Address, clientUserID common.Address) {
+	b.tcpConnMapMu.Lock()
+	defer b.tcpConnMapMu.Unlock()
 
-	case *net.OpError:
-		if !e.Temporary() {
-			b.log.Info(ctx, "chat-isCriticalError", "status", "client disconnected")
-			return true
+	list := b.tcpConnMap[tuiUserID]
+	list = append(list, clientUserID)
+	b.tcpConnMap[tuiUserID] = list
+}
+
+func (b *Business) removeTCPConnection(ctx context.Context, tuiUserID common.Address) {
+	b.tcpConnMapMu.Lock()
+	defer func() {
+		delete(b.tcpConnMap, tuiUserID)
+		b.tcpConnMapMu.Unlock()
+	}()
+
+	for _, clientUserID := range b.tcpConnMap[tuiUserID] {
+		clt, err := b.tcpCltMgr.Retrieve(ctx, clientUserID.String())
+		if err != nil {
+			b.log.Info(ctx, "drop-tcp-connection", "status", "NOT FOUND", "clientUserID", clientUserID)
+			continue
 		}
-		return false
 
-	default:
-		if errors.Is(err, context.Canceled) {
-			b.log.Info(ctx, "chat-isCriticalError", "status", "client canceled")
-			return true
-		}
+		b.log.Info(ctx, "drop-tcp-connection", "status", "found", "clientUserID", clientUserID)
 
-		if errors.Is(err, nats.ErrConnectionClosed) {
-			b.log.Info(ctx, "chat-isCriticalError", "status", "nats connection closed")
-			return true
-		}
-
-		b.log.Info(ctx, "chat-isCriticalError", "ERROR", err, "TYPE", fmt.Sprintf("%T", err))
-		return false
+		clt.Conn.Close()
 	}
 }

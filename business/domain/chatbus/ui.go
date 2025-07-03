@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net"
 	"net/http"
 	"time"
 
@@ -13,6 +14,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
+	"github.com/nats-io/nats.go"
 )
 
 // UIHandshake performs the connection handshake protocol.
@@ -83,7 +85,7 @@ func (b *Business) UIListen(ctx context.Context, from UIUser) {
 	for {
 		msg, err := b.uiReadMessage(ctx, from)
 		if err != nil {
-			if b.isCriticalError(ctx, err) {
+			if b.isUICriticalError(ctx, err) {
 				return
 			}
 			continue
@@ -91,11 +93,11 @@ func (b *Business) UIListen(ctx context.Context, from UIUser) {
 
 		var inMsg uiIncomingMessage
 		if err := json.Unmarshal(msg, &inMsg); err != nil {
-			b.log.Info(ctx, "loc-unmarshal", "ERROR", err)
+			b.log.Info(ctx, "uilisten: unmarshal", "ERROR", err)
 			continue
 		}
 
-		b.log.Info(ctx, "CLIENT: msg recv", "fromNonce", inMsg.FromNonce, "from", from.ID, "to", inMsg.ToID, "encrypted", inMsg.Encrypted, "message", inMsg.Msg)
+		b.log.Info(ctx, "uilisten: msg recv", "fromNonce", inMsg.FromNonce, "from", from.ID, "to", inMsg.ToID, "encrypted", inMsg.Encrypted, "message", inMsg.Msg)
 
 		dataThatWasSign := struct {
 			ToID      common.Address
@@ -109,12 +111,12 @@ func (b *Business) UIListen(ctx context.Context, from UIUser) {
 
 		id, err := signature.FromAddress(dataThatWasSign, inMsg.V, inMsg.R, inMsg.S)
 		if err != nil {
-			b.log.Info(ctx, "loc-fromAddress", "ERROR", err)
+			b.log.Info(ctx, "uilisten: fromAddress", "ERROR", err)
 			continue
 		}
 
 		if id != from.ID.Hex() {
-			b.log.Info(ctx, "loc-signature check", "status", "signature does not match")
+			b.log.Info(ctx, "uilisten: signature check", "status", "signature does not match")
 			continue
 		}
 
@@ -127,17 +129,17 @@ func (b *Business) UIListen(ctx context.Context, from UIUser) {
 		// If the user is found, send the message directly to the user.
 		uiTo, err := b.uiCltMgr.Retrieve(ctx, inMsg.ToID)
 		if err == nil {
-			b.log.Info(ctx, "LOC: msg sent over web socket", "from", from.ID, "to", inMsg.ToID)
+			b.log.Info(ctx, "uilisten: msg sent over web socket", "from", from.ID, "to", inMsg.ToID)
 
 			if err := uiSendMessage(from, uiTo, inMsg.FromNonce, inMsg.Encrypted, inMsg.Msg); err != nil {
-				b.log.Info(ctx, "loc-send", "ERROR", err)
+				b.log.Info(ctx, "uilisten: send", "ERROR", err)
 			}
 
 			continue
 		}
 
 		if !errors.Is(err, ErrNotExists) {
-			b.log.Info(ctx, "loc-retrieve", "ERROR", err)
+			b.log.Info(ctx, "uilisten: retrieve", "ERROR", err)
 		}
 
 		// ---------------------------------------------------------------------
@@ -145,10 +147,10 @@ func (b *Business) UIListen(ctx context.Context, from UIUser) {
 
 		clt, err := b.tcpCltMgr.Retrieve(ctx, inMsg.ToID.String())
 		if err == nil {
-			b.log.Info(ctx, "LOC: msg sent over tcp", "from", from.ID, "to", inMsg.ToID)
+			b.log.Info(ctx, "uilisten: msg sent over tcp", "from", from.ID, "to", inMsg.ToID)
 
 			if err := b.tcpSendMessage(clt, from, inMsg); err != nil {
-				b.log.Info(ctx, "loc-tcp-send", "ERROR", err)
+				b.log.Info(ctx, "uilisten: tcp-send", "ERROR", err)
 			}
 
 			continue
@@ -159,10 +161,10 @@ func (b *Business) UIListen(ctx context.Context, from UIUser) {
 
 		// We don't have a web socket connection for the user then send the
 		// message over nats to find a CAP that can deliver the message.
-		b.log.Info(ctx, "loc-retrieve", "status", "user not found, sending over nats")
+		b.log.Info(ctx, "uilisten: retrieve", "status", "user not found, sending over nats")
 
 		if err := b.natsSendMessage(ctx, from, inMsg); err != nil {
-			b.log.Info(ctx, "loc-nats-send", "ERROR", err)
+			b.log.Info(ctx, "uilisten: nats-send", "ERROR", err)
 		}
 	}
 }
@@ -259,6 +261,35 @@ func (b *Business) uiPong(id common.Address) func(appData string) error {
 	}
 
 	return f
+}
+
+func (b *Business) isUICriticalError(ctx context.Context, err error) bool {
+	switch e := err.(type) {
+	case *websocket.CloseError:
+		b.log.Info(ctx, "uilisten", "status", "client-ui disconnected")
+		return true
+
+	case *net.OpError:
+		if !e.Temporary() {
+			b.log.Info(ctx, "uilisten", "status", "client-ui disconnected")
+			return true
+		}
+		return false
+
+	default:
+		if errors.Is(err, context.Canceled) {
+			b.log.Info(ctx, "uilisten", "status", "client-ui canceled")
+			return true
+		}
+
+		if errors.Is(err, nats.ErrConnectionClosed) {
+			b.log.Info(ctx, "uilisten", "status", "nats connection closed")
+			return true
+		}
+
+		b.log.Info(ctx, "uilisten", "ERROR", err, "TYPE", fmt.Sprintf("%T", err))
+		return false
+	}
 }
 
 // =============================================================================

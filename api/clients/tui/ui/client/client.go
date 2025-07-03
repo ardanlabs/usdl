@@ -381,22 +381,24 @@ var defaultClient = http.Client{
 	},
 }
 
-func (app *App) EstablishTCPConnection(ctx context.Context, to common.Address) error {
-	usr, err := app.db.QueryContactByID(to)
+func (app *App) EstablishTCPConnection(ctx context.Context, tuiUserID common.Address, clientUserID common.Address) error {
+	usr, err := app.db.QueryContactByID(clientUserID)
 	if err != nil {
 		return fmt.Errorf("query contact: %w", err)
 	}
 
 	if usr.TCPHost == "" {
-		return fmt.Errorf("no TCP host found for contact: %s", to)
+		return fmt.Errorf("no TCP host found for contact: %s", clientUserID)
 	}
 
 	tcpConnRequest := struct {
-		UserID  string `json:"user_id"`
-		TCPHost string `json:"tcp_host"`
+		TUIUserID    string `json:"tui_user_id"`
+		ClientUserID string `json:"client_user_id"`
+		TCPHost      string `json:"tcp_host"`
 	}{
-		UserID:  to.String(),
-		TCPHost: usr.TCPHost,
+		TUIUserID:    tuiUserID.String(),
+		ClientUserID: clientUserID.String(),
+		TCPHost:      usr.TCPHost,
 	}
 
 	var b bytes.Buffer

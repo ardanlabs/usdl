@@ -35,6 +35,8 @@ func (a *app) connect(ctx context.Context, r *http.Request) web.Encoder {
 
 	a.chat.UIListen(ctx, usr)
 
+	a.chat.DropTCPConnection(ctx, usr.ID)
+
 	return web.NewNoResponse()
 }
 
@@ -44,9 +46,10 @@ func (a *app) tcpConnect(ctx context.Context, r *http.Request) web.Encoder {
 		return errs.Newf(errs.InvalidArgument, "invalid request: %s", err)
 	}
 
-	userID := common.HexToAddress(tcpConnReq.UserID)
+	tuiUserID := common.HexToAddress(tcpConnReq.TUIUserID)
+	clientUserID := common.HexToAddress(tcpConnReq.ClientUserID)
 
-	if err := a.chat.DialTCPConnection(ctx, userID, "tcp4", tcpConnReq.TCPHost); err != nil {
+	if err := a.chat.DialTCPConnection(ctx, tuiUserID, clientUserID, "tcp4", tcpConnReq.TCPHost); err != nil {
 		return errs.Newf(errs.Internal, "failed to dial tcp connection: %s", err)
 	}
 

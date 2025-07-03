@@ -117,13 +117,14 @@ func (clt *Client) read() {
 	clt.log(clt.ctx, clt.name, EvtRead, TypInfo, clt.ipAddress, "client G started")
 
 	defer func() {
-		clt.log(clt.ctx, clt.name, EvtDrop, TypInfo, clt.ipAddress, "client G disconnected")
-
 		clt.handlers.Drop(clt)
 
-		if err := clt.clients.close(clt.Conn); err != nil {
+		if err := clt.clients.close(clt.userID); err != nil {
 			clt.log(clt.ctx, clt.name, EvtDrop, TypError, clt.ipAddress, "error closing client: %s", err)
 		}
+
+		clt.log(clt.ctx, clt.name, EvtDrop, TypInfo, clt.ipAddress, "client G disconnected")
+
 		clt.wg.Done()
 	}()
 
