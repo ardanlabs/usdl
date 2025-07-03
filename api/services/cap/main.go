@@ -26,10 +26,9 @@ import (
 
 /*
 	CAP to CAP communication
-		- fix: When client tcp drops the cap is still tring to use tcp.
 		- fix ui coloring issue with connections and drops
+		- fix: Drop TCP connections with double click
 		- final testing
-		- Tailscale
 
 	Datafile transfer
 		- Private stream
