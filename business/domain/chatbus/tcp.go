@@ -76,21 +76,27 @@ func (sh ServerHandlers) Bind(clt *tcp.Client) {
 
 	clt.Reader = bufio.NewReader(clt.Conn)
 
-	msg := [][]byte{[]byte("EVENT"), []byte("TCP-CONN")}
+	// -------------------------------------------------------------------------
 
-	from := UIUser{
-		ID: common.HexToAddress(clt.UserID()),
-	}
+	// TODO: PERFORM HANDSHAKE TO GET USER ID
 
-	for _, conn := range sh.uiCltMgr.Connections() {
-		to := UIUser{
-			UIConn: conn.Conn,
-		}
+	// -------------------------------------------------------------------------
 
-		if err := uiSendMessage(from, to, 0, false, msg); err != nil {
-			sh.log.Info(clt.Context(), "uilisten: send", "ERROR", err)
-		}
-	}
+	// msg := [][]byte{[]byte("EVENT"), []byte("TCP-CONN")}
+
+	// from := UIUser{
+	// 	ID: common.HexToAddress(clt.UserID()),
+	// }
+
+	// for _, conn := range sh.uiCltMgr.Connections() {
+	// 	to := UIUser{
+	// 		UIConn: conn.Conn,
+	// 	}
+
+	// 	if err := uiSendMessage(from, to, 0, false, msg); err != nil {
+	// 		sh.log.Info(clt.Context(), "uilisten: send", "ERROR", err)
+	// 	}
+	// }
 }
 
 // Read reads data from the client connection.

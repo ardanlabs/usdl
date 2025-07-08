@@ -121,6 +121,9 @@ func (b *Business) DialTCPConnection(ctx context.Context, tuiUserID common.Addre
 
 	b.addTCPConnection(tuiUserID, clientUserID)
 
+	// -------------------------------------------------------------------------
+	// TODO: PERFORM HANDSHAKE TO SEND USER ID
+
 	return nil
 }
 
