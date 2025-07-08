@@ -289,9 +289,9 @@ func (ui *TUI) ApplyContactPrefix(id common.Address, option string, add bool) {
 					ui.list.SetItemText(i, finalName, idStr)
 
 				case "<-":
-					var finalName string
+					finalName := name
 					if hasRightArrow {
-						finalName = fmt.Sprintf("-> %s", name)
+						finalName = fmt.Sprintf("-> %s", finalName)
 					}
 					finalName = fmt.Sprintf("<- %s", finalName)
 					if hasStar {

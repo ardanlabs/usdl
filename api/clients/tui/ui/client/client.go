@@ -212,41 +212,31 @@ func (app *App) ReceiveCapMessage(conn *websocket.Conn) {
 
 		// -----------------------------------------------------------------
 
-		expNonce := user.LastNonce + 1
-		if inMsg.From.Nonce < expNonce {
-			app.ui.WriteText(errorMessage("invalid nonce: possible security issue with contact: got: %d, exp: %d", inMsg.From.Nonce, expNonce))
+		if len(inMsg.Msg) == 0 {
+			app.ui.WriteText(errorMessage("no message"))
 			return
 		}
 
-		if err := app.db.UpdateContactNonce(inMsg.From.ID, expNonce); err != nil {
-			app.ui.WriteText(errorMessage("update app nonce: %s", err))
-			return
-		}
+		// -----------------------------------------------------------------
 
-		// ---------------------------------------------------------------------
-
-		msg, err := app.preprocessRecvMessage(inMsg)
-		if err != nil {
-			app.ui.WriteText(errorMessage("preprocess message: %s", err))
-			return
-		}
-
-		// ---------------------------------------------------------------------
-
-		if inMsg.Msg[0][0] != '/' {
-			msg := Message{
-				From:    inMsg.From.ID,
-				To:      app.id.MyAccountID,
-				Name:    inMsg.From.Name,
-				Content: msg,
-			}
-
-			if err := app.db.InsertMessage(inMsg.From.ID, msg); err != nil {
-				app.ui.WriteText(errorMessage("add message: %s", err))
+		if string(inMsg.Msg[0]) != "EVENT" {
+			expNonce := user.LastNonce + 1
+			if inMsg.From.Nonce < expNonce {
+				app.ui.WriteText(errorMessage("invalid nonce: possible security issue with contact: got: %d, exp: %d", inMsg.From.Nonce, expNonce))
 				return
 			}
 
-			app.ui.WriteText(msg)
+			if err := app.db.UpdateContactNonce(inMsg.From.ID, expNonce); err != nil {
+				app.ui.WriteText(errorMessage("update app nonce: %s", err))
+				return
+			}
+		}
+
+		// ---------------------------------------------------------------------
+
+		if err := app.preprocessRecvMessage(inMsg); err != nil {
+			app.ui.WriteText(errorMessage("preprocess message: %s", err))
+			return
 		}
 	}
 }
@@ -442,11 +432,11 @@ func (app *App) EstablishTCPConnection(ctx context.Context, tuiUserID common.Add
 
 // =============================================================================
 
-func (app *App) preprocessRecvMessage(inMsg incomingMessage) ([][]byte, error) {
+func (app *App) preprocessRecvMessage(inMsg incomingMessage) error {
 	msgs := inMsg.Msg
 
 	if len(msgs) == 0 {
-		return nil, fmt.Errorf("no message")
+		return fmt.Errorf("no message")
 	}
 
 	// -------------------------------------------------------------------------
@@ -473,7 +463,12 @@ func (app *App) preprocessRecvMessage(inMsg incomingMessage) ([][]byte, error) {
 			})
 
 			app.ui.ApplyContactPrefix(inMsg.From.ID, "->", false)
+
+		default:
+			return fmt.Errorf("unknown event: %s", string(inMsg.Msg[0]))
 		}
+
+		return nil
 	}
 
 	// -------------------------------------------------------------------------
@@ -481,7 +476,19 @@ func (app *App) preprocessRecvMessage(inMsg incomingMessage) ([][]byte, error) {
 
 	if msgs[0][0] != '/' {
 		if !inMsg.Encrypted {
-			return msgs, nil
+			msg := Message{
+				From:    inMsg.From.ID,
+				To:      app.id.MyAccountID,
+				Name:    inMsg.From.Name,
+				Content: msgs,
+			}
+
+			if err := app.db.InsertMessage(inMsg.From.ID, msg); err != nil {
+				return fmt.Errorf("add message: %w", err)
+			}
+
+			app.ui.WriteText(msg)
+			return nil
 		}
 
 		decryptedData := make([][]byte, len(msgs))
@@ -489,13 +496,25 @@ func (app *App) preprocessRecvMessage(inMsg incomingMessage) ([][]byte, error) {
 		for i, msg := range msgs {
 			dd, err := rsa.DecryptPKCS1v15(rand.Reader, app.id.PrivKeyRSA, []byte(msg))
 			if err != nil {
-				return nil, fmt.Errorf("decrypting message: %w", err)
+				return fmt.Errorf("decrypting message: %w", err)
 			}
 
 			decryptedData[i] = dd
 		}
 
-		return decryptedData, nil
+		msg := Message{
+			From:    inMsg.From.ID,
+			To:      app.id.MyAccountID,
+			Name:    inMsg.From.Name,
+			Content: decryptedData,
+		}
+
+		if err := app.db.InsertMessage(inMsg.From.ID, msg); err != nil {
+			return fmt.Errorf("add message: %w", err)
+		}
+
+		app.ui.WriteText(msg)
+		return nil
 	}
 
 	// -------------------------------------------------------------------------
@@ -505,18 +524,32 @@ func (app *App) preprocessRecvMessage(inMsg incomingMessage) ([][]byte, error) {
 
 	parts := strings.Split(msgStr[1:], " ")
 	if len(parts) < 2 {
-		return nil, fmt.Errorf("invalid command format: parts: %d", len(parts))
+		return fmt.Errorf("invalid command format: parts: %d", len(parts))
 	}
 
 	switch parts[0] {
 	case "key":
 		if err := app.db.UpdateContactKey(inMsg.From.ID, msgStr[5:]); err != nil {
-			return nil, fmt.Errorf("updating key: %w", err)
+			return fmt.Errorf("updating key: %w", err)
 		}
-		return [][]byte{[]byte("** updated contact's key **")}, nil
+
+		msg := Message{
+			From:    inMsg.From.ID,
+			To:      app.id.MyAccountID,
+			Name:    inMsg.From.Name,
+			Content: [][]byte{[]byte("** updated contact's key **")},
+		}
+
+		if err := app.db.InsertMessage(inMsg.From.ID, msg); err != nil {
+			return fmt.Errorf("add message: %w", err)
+		}
+
+		app.ui.WriteText(msg)
+
+		return nil
 	}
 
-	return nil, fmt.Errorf("unknown command")
+	return fmt.Errorf("unknown command")
 }
 
 func (app *App) preprocessSendMessage(usr User, msgs [][]byte) (onWire [][]byte, onScreen [][]byte, err error) {
