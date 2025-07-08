@@ -26,7 +26,8 @@ import (
 
 /*
 	CAP to CAP communication
-		- fix ui coloring issue with connections and drops
+		- fix: ui coloring issue with connections and drops
+			- We need the handshake for new tcp connections in bind
 		- fix: Drop TCP connections with double click
 		- final testing
 
