@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"math"
 	"math/rand/v2"
+	"strings"
 	"time"
 
 	"github.com/ardanlabs/usdl/api/clients/tui/ui/client"
@@ -89,8 +90,10 @@ func New(myAccountID common.Address, agent *ollamallm.Agent) *TUI {
 			}
 		}
 
+		name = strings.ReplaceAll(name, "* ", "")
+
 		textView.ScrollToEnd()
-		list.SetItemText(idx, user.Name, user.ID.Hex())
+		list.SetItemText(idx, name, id)
 	})
 
 	// -------------------------------------------------------------------------
@@ -346,6 +349,8 @@ func (ui *TUI) establishUserConnection() {
 	idx := ui.list.GetCurrentItem()
 	name, currentID := ui.list.GetItemText(idx)
 
+	name = strings.ReplaceAll(name, "<- ", "")
+
 	fmt.Fprintln(ui.textView, "-----")
 	fmt.Fprintf(ui.textView, "Establishing Peer Connection with %s\n", name)
 
@@ -357,4 +362,6 @@ func (ui *TUI) establishUserConnection() {
 
 	fmt.Fprintln(ui.textView, "-----")
 	fmt.Fprintln(ui.textView, "TCP connection established")
+
+	ui.list.SetItemText(idx, "<- "+name, currentID)
 }
