@@ -257,9 +257,76 @@ func (ui *TUI) WriteText(msg client.Message) {
 	}
 }
 
-func (ui *TUI) UpdateContact(id common.Address, name string) {
+func (ui *TUI) AddContact(id common.Address, name string) {
 	shortcut := rune(ui.list.GetItemCount() + 49)
 	ui.list.AddItem(name, id.Hex(), shortcut, nil)
+}
+
+func (ui *TUI) ApplyContactPrefix(id common.Address, option string, add bool) {
+	for i := range ui.list.GetItemCount() {
+		name, idStr := ui.list.GetItemText(i)
+
+		if id.Hex() == idStr {
+			hasStar := strings.Contains(name, "*")
+			hasLeftArrow := strings.Contains(name, "<-")
+			hasRightArrow := strings.Contains(name, "->")
+
+			name = strings.ReplaceAll(name, "* ", "")
+			name = strings.ReplaceAll(name, "-> ", "")
+			name = strings.ReplaceAll(name, "<- ", "")
+
+			switch add {
+			case true:
+				switch option {
+				case "->":
+					finalName := fmt.Sprintf("-> %s", name)
+					if hasLeftArrow {
+						finalName = fmt.Sprintf("<- %s", finalName)
+					}
+					if hasStar {
+						finalName = fmt.Sprintf("* %s", finalName)
+					}
+					ui.list.SetItemText(i, finalName, idStr)
+
+				case "<-":
+					var finalName string
+					if hasRightArrow {
+						finalName = fmt.Sprintf("-> %s", name)
+					}
+					finalName = fmt.Sprintf("<- %s", finalName)
+					if hasStar {
+						finalName = fmt.Sprintf("* %s", finalName)
+					}
+					ui.list.SetItemText(i, finalName, idStr)
+				}
+
+			case false:
+				switch option {
+				case "->":
+					finalName := name
+					if hasLeftArrow {
+						finalName = fmt.Sprintf("<- %s", finalName)
+					}
+					if hasStar {
+						finalName = fmt.Sprintf("* %s", finalName)
+					}
+					ui.list.SetItemText(i, finalName, idStr)
+
+				case "<-":
+					finalName := name
+					if hasRightArrow {
+						finalName = fmt.Sprintf("-> %s", finalName)
+					}
+					if hasStar {
+						finalName = fmt.Sprintf("* %s", finalName)
+					}
+					ui.list.SetItemText(i, finalName, idStr)
+				}
+			}
+
+			return
+		}
+	}
 }
 
 // =============================================================================
@@ -349,8 +416,6 @@ func (ui *TUI) establishUserConnection() {
 	idx := ui.list.GetCurrentItem()
 	name, currentID := ui.list.GetItemText(idx)
 
-	name = strings.ReplaceAll(name, "<- ", "")
-
 	fmt.Fprintln(ui.textView, "-----")
 	fmt.Fprintf(ui.textView, "Establishing Peer Connection with %s\n", name)
 
@@ -363,5 +428,5 @@ func (ui *TUI) establishUserConnection() {
 	fmt.Fprintln(ui.textView, "-----")
 	fmt.Fprintln(ui.textView, "TCP connection established")
 
-	ui.list.SetItemText(idx, "<- "+name, currentID)
+	ui.ApplyContactPrefix(common.HexToAddress(currentID), "<-", true)
 }

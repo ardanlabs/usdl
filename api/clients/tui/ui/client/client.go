@@ -61,7 +61,8 @@ type Storage interface {
 type UI interface {
 	Run() error // Must be non-blocking
 	WriteText(msg Message)
-	UpdateContact(id common.Address, name string)
+	AddContact(id common.Address, name string)
+	ApplyContactPrefix(id common.Address, option string, add bool)
 }
 
 // =============================================================================
@@ -203,7 +204,7 @@ func (app *App) ReceiveCapMessage(conn *websocket.Conn) {
 				return
 			}
 
-			app.ui.UpdateContact(inMsg.From.ID, inMsg.From.Name)
+			app.ui.AddContact(inMsg.From.ID, inMsg.From.Name)
 
 		default:
 			inMsg.From.Name = user.Name
@@ -443,6 +444,37 @@ func (app *App) EstablishTCPConnection(ctx context.Context, tuiUserID common.Add
 
 func (app *App) preprocessRecvMessage(inMsg incomingMessage) ([][]byte, error) {
 	msgs := inMsg.Msg
+
+	if len(msgs) == 0 {
+		return nil, fmt.Errorf("no message")
+	}
+
+	// -------------------------------------------------------------------------
+	// Process Event Message
+
+	if string(msgs[0]) == "EVENT" {
+		switch string(msgs[1]) {
+		case "TCP-CONN":
+			app.ui.WriteText(Message{
+				From:    inMsg.From.ID,
+				To:      app.id.MyAccountID,
+				Name:    "system",
+				Content: [][]byte{[]byte("TCP connection established")},
+			})
+
+			app.ui.ApplyContactPrefix(inMsg.From.ID, "->", true)
+
+		case "TCP-DROP":
+			app.ui.WriteText(Message{
+				From:    inMsg.From.ID,
+				To:      app.id.MyAccountID,
+				Name:    "system",
+				Content: [][]byte{[]byte("TCP connection dropped")},
+			})
+
+			app.ui.ApplyContactPrefix(inMsg.From.ID, "->", false)
+		}
+	}
 
 	// -------------------------------------------------------------------------
 	// Process Normal Message
