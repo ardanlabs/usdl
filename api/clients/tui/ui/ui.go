@@ -90,9 +90,9 @@ func New(myAccountID common.Address, agent *ollamallm.Agent) *TUI {
 			}
 		}
 
-		name = strings.ReplaceAll(name, "* ", "")
-
 		textView.ScrollToEnd()
+
+		name = strings.ReplaceAll(name, "* ", "")
 		list.SetItemText(idx, name, id)
 	})
 
@@ -244,8 +244,10 @@ func (ui *TUI) WriteText(msg client.Message) {
 		for i := range ui.list.GetItemCount() {
 			name, idStr := ui.list.GetItemText(i)
 			if msg.From.Hex() == idStr {
-				ui.list.SetItemText(i, "* "+name, idStr)
-				ui.tviewApp.Draw()
+				if !strings.Contains(name, "*") {
+					ui.list.SetItemText(i, "* "+name, idStr)
+					ui.tviewApp.Draw()
+				}
 
 				if ui.aiMode {
 					ui.agentResponse(msg.From)
