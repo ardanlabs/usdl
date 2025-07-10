@@ -126,7 +126,7 @@ func (b *Business) DialTCPConnection(ctx context.Context, tuiUserID common.Addre
 	handshake := struct {
 		User string `json:"user_id"`
 	}{
-		User: clientUserID.String(),
+		User: tuiUserID.String(),
 	}
 
 	data, err := json.Marshal(handshake)

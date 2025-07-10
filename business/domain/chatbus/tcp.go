@@ -27,7 +27,7 @@ func NewClientHandlers(log *logger.Logger) *ClientHandlers {
 
 // Bind binds the client to the server handlers.
 func (ch ClientHandlers) Bind(clt *tcp.Client) {
-	ch.log.Info(clt.Context(), "client-bind", "userID", clt.UserID())
+	ch.log.Info(clt.Context(), "client-bind", "userID", clt.Key())
 
 	clt.Reader = bufio.NewReader(clt.Conn)
 }
@@ -72,7 +72,7 @@ func NewServerHandlers(log *logger.Logger, uiCltMgr UIClientManager) *ServerHand
 
 // Bind binds the client to the server handlers.
 func (sh ServerHandlers) Bind(clt *tcp.Client) {
-	sh.log.Info(clt.Context(), "server-bind", "userID", clt.UserID())
+	sh.log.Info(clt.Context(), "server-bind", "key", clt.Key())
 
 	bufReader := bufio.NewReader(clt.Conn)
 
@@ -90,7 +90,7 @@ func (sh ServerHandlers) Bind(clt *tcp.Client) {
 		return
 	}
 
-	sh.log.Info(clt.Context(), "server-bind: handshake", "handshake", line)
+	sh.log.Info(clt.Context(), "server-bind: handshake", "json", line)
 
 	var handshake struct {
 		UserID string `json:"user_id"`
