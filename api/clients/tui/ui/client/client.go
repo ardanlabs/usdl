@@ -459,7 +459,7 @@ func (app *App) preprocessRecvMessage(inMsg incomingMessage) error {
 				From:    inMsg.From.ID,
 				To:      app.id.MyAccountID,
 				Name:    "system",
-				Content: [][]byte{[]byte("TCP connection dropped")},
+				Content: [][]byte{[]byte("TCP connection dropped from: " + inMsg.From.ID.String())},
 			})
 
 			app.ui.ApplyContactPrefix(inMsg.From.ID, "->", false)

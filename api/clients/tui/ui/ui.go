@@ -288,6 +288,7 @@ func (ui *TUI) ApplyContactPrefix(id common.Address, option string, add bool) {
 					if hasStar {
 						finalName = fmt.Sprintf("* %s", finalName)
 					}
+					finalName = strings.ReplaceAll(finalName, "<- ->", "<->")
 					ui.list.SetItemText(i, finalName, idStr)
 
 				case "<-":
@@ -299,6 +300,7 @@ func (ui *TUI) ApplyContactPrefix(id common.Address, option string, add bool) {
 					if hasStar {
 						finalName = fmt.Sprintf("* %s", finalName)
 					}
+					finalName = strings.ReplaceAll(finalName, "<- ->", "<->")
 					ui.list.SetItemText(i, finalName, idStr)
 				}
 
@@ -428,7 +430,7 @@ func (ui *TUI) establishUserConnection() {
 	}
 
 	fmt.Fprintln(ui.textView, "-----")
-	fmt.Fprintln(ui.textView, "TCP connection established")
+	fmt.Fprintf(ui.textView, "TCP connection established with %s\n", name)
 
 	ui.ApplyContactPrefix(common.HexToAddress(currentID), "<-", true)
 }
