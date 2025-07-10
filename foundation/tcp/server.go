@@ -180,7 +180,10 @@ func (srv *Server) Listen() error {
 
 				// Add this new connection to the manager map and
 				// start the client goroutine.
-				srv.startNewClient(conn)
+				if err := srv.startNewClient(conn); err != nil {
+					srv.log(srv.ctx, srv.name, EvtAccept, TypError, conn.RemoteAddr().String(), err.Error())
+					conn.Close()
+				}
 			}
 		}
 	}()
@@ -243,18 +246,17 @@ func (srv *Server) Groom(d time.Duration) {
 // =============================================================================
 
 // startNewClient takes a new connection and adds it to the manager.
-func (srv *Server) startNewClient(conn net.Conn) {
+func (srv *Server) startNewClient(conn net.Conn) error {
 	key := ipAddress(conn)
 
-	if _, err := srv.clients.find(key); err == nil {
-		srv.log(srv.ctx, srv.name, EvtJoin, TypError, key, "already connected")
-		conn.Close()
-		return
+	c, err := newClient(key, srv.name, srv.log, srv.clients, srv.handlers, conn)
+	if err != nil {
+		return err
 	}
-
-	c := newClient(key, srv.name, srv.log, srv.clients, srv.handlers, conn)
 
 	srv.clients.add(key, c)
 
 	c.start()
+
+	return nil
 }

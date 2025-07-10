@@ -26,10 +26,12 @@ func NewClientHandlers(log *logger.Logger) *ClientHandlers {
 }
 
 // Bind binds the client to the server handlers.
-func (ch ClientHandlers) Bind(clt *tcp.Client) {
+func (ch ClientHandlers) Bind(clt *tcp.Client) error {
 	ch.log.Info(clt.Context(), "client-bind", "userID", clt.Key())
 
 	clt.Reader = bufio.NewReader(clt.Conn)
+
+	return nil
 }
 
 // Read reads data from the client connection.
@@ -71,7 +73,7 @@ func NewServerHandlers(log *logger.Logger, uiCltMgr UIClientManager) *ServerHand
 }
 
 // Bind binds the client to the server handlers.
-func (sh ServerHandlers) Bind(clt *tcp.Client) {
+func (sh ServerHandlers) Bind(clt *tcp.Client) error {
 	sh.log.Info(clt.Context(), "server-bind", "key", clt.Key())
 
 	bufReader := bufio.NewReader(clt.Conn)
@@ -86,8 +88,7 @@ func (sh ServerHandlers) Bind(clt *tcp.Client) {
 	line, err := bufReader.ReadString('\n')
 	if err != nil {
 		sh.log.Info(clt.Context(), "server-bind: handshake-wait", "ERROR", err)
-		clt.Conn.Close()
-		return
+		return err
 	}
 
 	sh.log.Info(clt.Context(), "server-bind: handshake", "json", line)
@@ -98,8 +99,7 @@ func (sh ServerHandlers) Bind(clt *tcp.Client) {
 
 	if err := json.Unmarshal([]byte(line), &handshake); err != nil {
 		sh.log.Info(clt.Context(), "server-bind: handshake-unmarshal", "ERROR", err)
-		clt.Conn.Close()
-		return
+		return err
 	}
 
 	clt.SetUserID(handshake.UserID)
@@ -121,6 +121,8 @@ func (sh ServerHandlers) Bind(clt *tcp.Client) {
 			sh.log.Info(clt.Context(), "uilisten: send", "ERROR", err)
 		}
 	}
+
+	return nil
 }
 
 // Read reads data from the client connection.

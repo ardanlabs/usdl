@@ -77,7 +77,7 @@ func (clt *Client) TraceID() uuid.UUID {
 }
 
 // newClient creates a new client for an incoming connection.
-func newClient(key string, name string, log internalLogger, clients *clients, handlers Handlers, conn net.Conn) *Client {
+func newClient(key string, name string, log internalLogger, clients *clients, handlers Handlers, conn net.Conn) (*Client, error) {
 	now := time.Now().UTC()
 
 	// This will be a TCPAddr 100% of the time.
@@ -100,11 +100,12 @@ func newClient(key string, name string, log internalLogger, clients *clients, ha
 		lastAct:   now,
 	}
 
-	// Inform the user we have a socket connection for a
-	// new client.
-	handlers.Bind(&clt)
+	// Inform the user we have a socket connection for a new client.
+	if err := handlers.Bind(&clt); err != nil {
+		return nil, err
+	}
 
-	return &clt
+	return &clt, nil
 }
 
 // SetContext sets the context for the client.

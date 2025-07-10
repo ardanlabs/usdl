@@ -100,7 +100,7 @@ type Handlers interface {
 type ConnHandler interface {
 
 	// Bind is called to set the reader and writer.
-	Bind(clt *Client)
+	Bind(clt *Client) error
 }
 
 // ReqHandler is implemented by the user to implement the processing

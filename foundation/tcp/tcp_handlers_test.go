@@ -13,8 +13,10 @@ import (
 type tcpHandlers struct{}
 
 // Bind is called to init to reader and writer.
-func (tcpHandlers) Bind(clt *tcp.Client) {
+func (tcpHandlers) Bind(clt *tcp.Client) error {
 	clt.Reader = bufio.NewReader(clt.Conn)
+
+	return nil
 }
 
 // Read implements the udp.ReqHandler interface. It is provided a request
