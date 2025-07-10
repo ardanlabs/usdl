@@ -210,9 +210,16 @@ func (srv *Server) Addr() net.Addr {
 	return srv.tcpAddr
 }
 
-// Clients returns the number of active clients connected.
-func (srv *Server) Clients() int {
-	return srv.clients.count()
+// Clients returns the number of active clients connected by user ID.
+func (srv *Server) Clients() []string {
+	clients := srv.clients.copy()
+
+	users := make([]string, 0, len(clients))
+	for _, c := range clients {
+		users = append(users, c.UserID())
+	}
+
+	return users
 }
 
 // Groom drops connections that are not active for the specified duration.

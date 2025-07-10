@@ -13,5 +13,6 @@ func Routes(app *web.App, log *logger.Logger, chatBus *chatbus.Business, serverA
 	api := newApp(log, chatBus, serverAddr)
 
 	app.HandlerFunc(http.MethodGet, "", "/connect", api.connect)
+	app.HandlerFunc(http.MethodGet, "", "/state", api.state)
 	app.HandlerFunc(http.MethodPost, "", "/tcpconnect", api.tcpConnect)
 }

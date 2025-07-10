@@ -196,7 +196,21 @@ func (ui *TUI) SetApp(app *client.App) {
 }
 
 func (ui *TUI) Run() error {
+	ui.updateState()
+
 	return ui.tviewApp.SetRoot(ui.flex, true).EnableMouse(true).Run()
+}
+
+func (ui *TUI) updateState() {
+	state, err := ui.app.GetState(context.Background())
+	if err != nil {
+		fmt.Fprintln(ui.textView, "-----")
+		fmt.Fprintln(ui.textView, "failed to get state: "+err.Error())
+	}
+
+	for _, conn := range state.TCPConnections {
+		ui.ApplyContactPrefix(conn, "<-", true)
+	}
 }
 
 func (ui *TUI) WriteText(msg client.Message) {

@@ -372,6 +372,39 @@ var defaultClient = http.Client{
 	},
 }
 
+type StateResponse struct {
+	TCPConnections []common.Address `json:"tcp_connections"`
+}
+
+func (app *App) GetState(ctx context.Context) (StateResponse, error) {
+	url := fmt.Sprintf("http://%s/state", app.url)
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return StateResponse{}, fmt.Errorf("create request error: %s: %w", url, err)
+	}
+
+	req.Header.Set("Cache-Control", "no-cache")
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := defaultClient.Do(req)
+	if err != nil {
+		return StateResponse{}, fmt.Errorf("do: error: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return StateResponse{}, fmt.Errorf("request error: status: %s: %w", http.StatusText(resp.StatusCode), err)
+	}
+
+	var state StateResponse
+	if err := json.NewDecoder(resp.Body).Decode(&state); err != nil {
+		return StateResponse{}, fmt.Errorf("decode: %w", err)
+	}
+
+	return state, nil
+}
+
 func (app *App) EstablishTCPConnection(ctx context.Context, tuiUserID common.Address, clientUserID common.Address) error {
 	usr, err := app.db.QueryContactByID(clientUserID)
 	if err != nil {

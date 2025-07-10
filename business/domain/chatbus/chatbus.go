@@ -43,6 +43,7 @@ type Config struct {
 	NATSConn    *nats.Conn
 	UICltMgr    UIClientManager
 	TCPCltMgr   TCPClientManager
+	TCPServer   *tcp.Server
 	NATSSubject string
 	CAPID       uuid.UUID
 }
@@ -57,6 +58,7 @@ type Business struct {
 	natsSubject  string
 	uiCltMgr     UIClientManager
 	tcpCltMgr    TCPClientManager
+	tcpServer    *tcp.Server
 	tcpConnMap   map[common.Address][]common.Address
 	tcpConnMapMu sync.Mutex
 }
@@ -99,6 +101,7 @@ func NewBusiness(cfg Config) (*Business, error) {
 		natsSubject: cfg.NATSSubject,
 		uiCltMgr:    cfg.UICltMgr,
 		tcpCltMgr:   cfg.TCPCltMgr,
+		tcpServer:   cfg.TCPServer,
 		tcpConnMap:  make(map[common.Address][]common.Address),
 	}
 
@@ -158,6 +161,20 @@ func (b *Business) DropTCPConnection(ctx context.Context, tuiUserID common.Addre
 	b.removeTCPConnection(ctx, tuiUserID)
 
 	return nil
+}
+
+// TCPConnections returns the list of client user IDs for a given tui user ID.
+func (b *Business) TCPConnections(ctx context.Context) []common.Address {
+	users := b.tcpServer.Clients()
+
+	b.log.Info(ctx, "tcp-connections", "count", len(users))
+
+	addresses := make([]common.Address, len(users))
+	for i, user := range users {
+		addresses[i] = common.HexToAddress(user)
+	}
+
+	return addresses
 }
 
 // =============================================================================

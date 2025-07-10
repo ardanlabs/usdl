@@ -1,6 +1,10 @@
 package chatapp
 
-import "encoding/json"
+import (
+	"encoding/json"
+
+	"github.com/ethereum/go-ethereum/common"
+)
 
 type tcpConnRequest struct {
 	TUIUserID    string `json:"tui_user_id"`
@@ -11,4 +15,13 @@ type tcpConnRequest struct {
 // Decode implements the decoder interface.
 func (app *tcpConnRequest) Decode(data []byte) error {
 	return json.Unmarshal(data, app)
+}
+
+type stateResponse struct {
+	TCPConnections []common.Address `json:"tcp_connections"`
+}
+
+func (app stateResponse) Encode() ([]byte, string, error) {
+	data, err := json.Marshal(app)
+	return data, "application/json", err
 }

@@ -217,6 +217,7 @@ func run(ctx context.Context, log *logger.Logger) error {
 		NATSConn:    nc,
 		UICltMgr:    uiCltMgr,
 		TCPCltMgr:   tcpCM,
+		TCPServer:   tcpSrv,
 		NATSSubject: cfg.NATS.Subject,
 		CAPID:       capID,
 	}

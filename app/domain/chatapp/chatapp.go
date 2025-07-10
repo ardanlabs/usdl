@@ -40,6 +40,14 @@ func (a *app) connect(ctx context.Context, r *http.Request) web.Encoder {
 	return web.NewNoResponse()
 }
 
+func (a *app) state(ctx context.Context, r *http.Request) web.Encoder {
+	connections := a.chat.TCPConnections(ctx)
+
+	return stateResponse{
+		TCPConnections: connections,
+	}
+}
+
 func (a *app) tcpConnect(ctx context.Context, r *http.Request) web.Encoder {
 	var tcpConnReq tcpConnRequest
 	if err := web.Decode(r, &tcpConnReq); err != nil {
