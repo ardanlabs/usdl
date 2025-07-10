@@ -237,17 +237,17 @@ func (srv *Server) Groom(d time.Duration) {
 
 // startNewClient takes a new connection and adds it to the manager.
 func (srv *Server) startNewClient(conn net.Conn) {
-	userID := ipAddress(conn)
+	key := ipAddress(conn)
 
-	if _, err := srv.clients.find(userID); err == nil {
-		srv.log(srv.ctx, srv.name, EvtJoin, TypError, userID, "already connected")
+	if _, err := srv.clients.find(key); err == nil {
+		srv.log(srv.ctx, srv.name, EvtJoin, TypError, key, "already connected")
 		conn.Close()
 		return
 	}
 
-	c := newClient(userID, srv.name, srv.log, srv.clients, srv.handlers, conn)
+	c := newClient(key, srv.name, srv.log, srv.clients, srv.handlers, conn)
 
-	srv.clients.add(userID, c)
+	srv.clients.add(key, c)
 
 	c.start()
 }

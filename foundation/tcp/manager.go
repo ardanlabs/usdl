@@ -79,7 +79,7 @@ func (cm *ClientManager) Shutdown(ctx context.Context) error {
 }
 
 // Dial establishes a new TCP connection to the specified address.
-func (cm *ClientManager) Dial(ctx context.Context, userID string, network string, address string) (*Client, error) {
+func (cm *ClientManager) Dial(ctx context.Context, key string, network string, address string) (*Client, error) {
 	conn, err := net.Dial(network, address)
 	if err != nil {
 		return nil, fmt.Errorf("dial: %w", err)
@@ -87,7 +87,7 @@ func (cm *ClientManager) Dial(ctx context.Context, userID string, network string
 
 	// Add this new connection to the manager map and
 	// start the client goroutine.
-	clt, err := cm.startNewClient(ctx, userID, conn)
+	clt, err := cm.startNewClient(ctx, key, conn)
 	if err != nil {
 		return nil, fmt.Errorf("startNewClient: %w", err)
 	}
@@ -96,8 +96,8 @@ func (cm *ClientManager) Dial(ctx context.Context, userID string, network string
 }
 
 // Retrieve retrieves a client by user ID.
-func (cm *ClientManager) Retrieve(ctx context.Context, userID string) (*Client, error) {
-	clt, err := cm.clients.find(userID)
+func (cm *ClientManager) Retrieve(ctx context.Context, key string) (*Client, error) {
+	clt, err := cm.clients.find(key)
 	if err != nil {
 		return nil, fmt.Errorf("find: %w", err)
 	}
@@ -108,18 +108,18 @@ func (cm *ClientManager) Retrieve(ctx context.Context, userID string) (*Client, 
 // =============================================================================
 
 // startNewClient takes a new connection and adds it to the manager.
-func (cm *ClientManager) startNewClient(ctx context.Context, userID string, conn net.Conn) (*Client, error) {
+func (cm *ClientManager) startNewClient(ctx context.Context, key string, conn net.Conn) (*Client, error) {
 	tcpAddr := conn.LocalAddr().(*net.TCPAddr)
 
-	if _, err := cm.clients.find(userID); err == nil {
+	if _, err := cm.clients.find(key); err == nil {
 		cm.log(ctx, cm.name, EvtJoin, TypError, tcpAddr.IP.String(), "already connected")
 		conn.Close()
 		return nil, errors.New("client already connected")
 	}
 
-	clt := newClient(userID, cm.name, cm.log, cm.clients, cm.handlers, conn)
+	clt := newClient(key, cm.name, cm.log, cm.clients, cm.handlers, conn)
 
-	cm.clients.add(userID, clt)
+	cm.clients.add(key, clt)
 
 	clt.start()
 

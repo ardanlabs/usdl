@@ -3,6 +3,7 @@ package chatbus
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"sync"
 	"time"
@@ -114,15 +115,38 @@ func NewBusiness(cfg Config) (*Business, error) {
 func (b *Business) DialTCPConnection(ctx context.Context, tuiUserID common.Address, clientUserID common.Address, network string, address string) error {
 	b.log.Info(ctx, "dial-tcp-connection", "tuiUserID", tuiUserID, "clientUserID", clientUserID, "network", network, "address", address)
 
-	_, err := b.tcpCltMgr.Dial(ctx, clientUserID.String(), network, address)
+	client, err := b.tcpCltMgr.Dial(ctx, clientUserID.String(), network, address)
 	if err != nil {
 		return fmt.Errorf("dial tcp connection: %w", err)
 	}
 
-	b.addTCPConnection(tuiUserID, clientUserID)
+	// -------------------------------------------------------------------------
+	// PERFORM HANDSHAKE TO SEND USER ID
+
+	handshake := struct {
+		User string `json:"user_id"`
+	}{
+		User: clientUserID.String(),
+	}
+
+	data, err := json.Marshal(handshake)
+	if err != nil {
+		return fmt.Errorf("marshal handshake: %w", err)
+	}
+
+	if _, err := client.Writer.Write(data); err != nil {
+		return fmt.Errorf("write handshake: %w", err)
+	}
+
+	if _, err := client.Writer.Write([]byte("\n")); err != nil {
+		return fmt.Errorf("write newline: %w", err)
+	}
 
 	// -------------------------------------------------------------------------
-	// TODO: PERFORM HANDSHAKE TO SEND USER ID
+
+	client.SetUserID(clientUserID.String())
+
+	b.addTCPConnection(tuiUserID, clientUserID)
 
 	return nil
 }

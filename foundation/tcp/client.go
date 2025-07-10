@@ -35,6 +35,7 @@ type Client struct {
 	Reader    io.Reader
 	Writer    io.Writer
 	ctx       context.Context
+	key       string
 	userID    string
 	name      string
 	log       internalLogger
@@ -50,9 +51,19 @@ type Client struct {
 	nWrites   int
 }
 
+// Key returns the key for the client.
+func (clt *Client) Key() string {
+	return clt.key
+}
+
 // UserID returns the user ID for the client.
 func (clt *Client) UserID() string {
 	return clt.userID
+}
+
+// SetUserID sets the user ID for the client.
+func (clt *Client) SetUserID(userID string) {
+	clt.userID = userID
 }
 
 // Context returns the context for the client.
@@ -66,7 +77,7 @@ func (clt *Client) TraceID() uuid.UUID {
 }
 
 // newClient creates a new client for an incoming connection.
-func newClient(userID string, name string, log internalLogger, clients *clients, handlers Handlers, conn net.Conn) *Client {
+func newClient(key string, name string, log internalLogger, clients *clients, handlers Handlers, conn net.Conn) *Client {
 	now := time.Now().UTC()
 
 	// This will be a TCPAddr 100% of the time.
@@ -77,7 +88,7 @@ func newClient(userID string, name string, log internalLogger, clients *clients,
 		Reader:    conn,
 		Writer:    conn,
 		ctx:       setTraceID(context.Background(), uuid.New()),
-		userID:    userID,
+		key:       key,
 		name:      name,
 		log:       log,
 		tcpAddr:   raddr,
@@ -119,7 +130,7 @@ func (clt *Client) read() {
 	defer func() {
 		clt.handlers.Drop(clt)
 
-		if err := clt.clients.close(clt.userID); err != nil {
+		if err := clt.clients.close(clt.key); err != nil {
 			clt.log(clt.ctx, clt.name, EvtDrop, TypError, clt.ipAddress, "error closing client: %s", err)
 		}
 

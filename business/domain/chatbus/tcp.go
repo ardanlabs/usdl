@@ -74,29 +74,53 @@ func NewServerHandlers(log *logger.Logger, uiCltMgr UIClientManager) *ServerHand
 func (sh ServerHandlers) Bind(clt *tcp.Client) {
 	sh.log.Info(clt.Context(), "server-bind", "userID", clt.UserID())
 
-	clt.Reader = bufio.NewReader(clt.Conn)
+	bufReader := bufio.NewReader(clt.Conn)
+
+	clt.Reader = bufReader
+
+	// -------------------------------------------------------------------------
+	// PERFORM HANDSHAKE TO RECEIVE USER ID
+
+	clt.Conn.SetReadDeadline(time.Now().Add(5 * time.Second))
+
+	line, err := bufReader.ReadString('\n')
+	if err != nil {
+		sh.log.Info(clt.Context(), "server-bind: handshake-wait", "ERROR", err)
+		clt.Conn.Close()
+		return
+	}
+
+	sh.log.Info(clt.Context(), "server-bind: handshake", "handshake", line)
+
+	var handshake struct {
+		UserID string `json:"user_id"`
+	}
+
+	if err := json.Unmarshal([]byte(line), &handshake); err != nil {
+		sh.log.Info(clt.Context(), "server-bind: handshake-unmarshal", "ERROR", err)
+		clt.Conn.Close()
+		return
+	}
+
+	clt.SetUserID(handshake.UserID)
 
 	// -------------------------------------------------------------------------
 
-	// TODO: PERFORM HANDSHAKE TO GET USER ID
+	msg := [][]byte{[]byte("EVENT"), []byte("TCP-CONN")}
 
-	// -------------------------------------------------------------------------
+	from := UIUser{
+		ID: common.HexToAddress(clt.UserID()),
+	}
 
-	// msg := [][]byte{[]byte("EVENT"), []byte("TCP-CONN")}
+	for _, conn := range sh.uiCltMgr.Connections() {
+		to := UIUser{
+			UIConn: conn.Conn,
+		}
 
-	// from := UIUser{
-	// 	ID: common.HexToAddress(clt.UserID()),
-	// }
-
-	// for _, conn := range sh.uiCltMgr.Connections() {
-	// 	to := UIUser{
-	// 		UIConn: conn.Conn,
-	// 	}
-
-	// 	if err := uiSendMessage(from, to, 0, false, msg); err != nil {
-	// 		sh.log.Info(clt.Context(), "uilisten: send", "ERROR", err)
-	// 	}
-	// }
+		if err := uiSendMessage(from, to, 0, false, msg); err != nil {
+			sh.log.Info(clt.Context(), "uilisten: send", "ERROR", err)
+		}
+	}
 }
 
 // Read reads data from the client connection.

@@ -37,34 +37,34 @@ func (clt *clients) copy() map[string]*Client {
 	return clients
 }
 
-func (clt *clients) add(userID string, client *Client) {
+func (clt *clients) add(key string, client *Client) {
 	clt.clientsMu.Lock()
 	defer clt.clientsMu.Unlock()
 
-	clt.clients[userID] = client
+	clt.clients[key] = client
 }
 
-func (clt *clients) close(userID string) error {
+func (clt *clients) close(key string) error {
 	clt.clientsMu.Lock()
 	defer clt.clientsMu.Unlock()
 
-	_, exists := clt.clients[userID]
+	_, exists := clt.clients[key]
 	if !exists {
 		return errors.New("already removed")
 	}
 
-	delete(clt.clients, userID)
+	delete(clt.clients, key)
 
 	return nil
 }
 
-func (clt *clients) find(userID string) (*Client, error) {
+func (clt *clients) find(key string) (*Client, error) {
 	clt.clientsMu.RLock()
 	defer clt.clientsMu.RUnlock()
 
-	c, exists := clt.clients[userID]
+	c, exists := clt.clients[key]
 	if !exists {
-		return nil, fmt.Errorf("user[ %s ] : not found", userID)
+		return nil, fmt.Errorf("key[ %s ] : not found", key)
 	}
 
 	return c, nil
