@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"math"
 	"math/rand/v2"
+	"regexp"
 	"strings"
 	"time"
 
@@ -278,6 +279,8 @@ func (ui *TUI) AddContact(id common.Address, name string) {
 	ui.list.AddItem(name, id.Hex(), shortcut, nil)
 }
 
+var re = regexp.MustCompile(`\s{2,}`)
+
 func (ui *TUI) ApplyContactPrefix(id common.Address, option string, add bool) {
 	for i := range ui.list.GetItemCount() {
 		name, idStr := ui.list.GetItemText(i)
@@ -287,9 +290,9 @@ func (ui *TUI) ApplyContactPrefix(id common.Address, option string, add bool) {
 			hasLeftArrow := strings.Contains(name, "<-")
 			hasRightArrow := strings.Contains(name, "->")
 
-			name = strings.ReplaceAll(name, "* ", "")
-			name = strings.ReplaceAll(name, "-> ", "")
-			name = strings.ReplaceAll(name, "<- ", "")
+			name = strings.ReplaceAll(name, "*", "")
+			name = strings.ReplaceAll(name, "->", "")
+			name = strings.ReplaceAll(name, "<-", "")
 
 			switch add {
 			case true:
@@ -303,6 +306,7 @@ func (ui *TUI) ApplyContactPrefix(id common.Address, option string, add bool) {
 						finalName = fmt.Sprintf("* %s", finalName)
 					}
 					finalName = strings.ReplaceAll(finalName, "<- ->", "<->")
+					finalName = re.ReplaceAllString(finalName, " ")
 					ui.list.SetItemText(i, finalName, idStr)
 
 				case "<-":
@@ -315,6 +319,7 @@ func (ui *TUI) ApplyContactPrefix(id common.Address, option string, add bool) {
 						finalName = fmt.Sprintf("* %s", finalName)
 					}
 					finalName = strings.ReplaceAll(finalName, "<- ->", "<->")
+					finalName = re.ReplaceAllString(finalName, " ")
 					ui.list.SetItemText(i, finalName, idStr)
 				}
 
@@ -328,6 +333,7 @@ func (ui *TUI) ApplyContactPrefix(id common.Address, option string, add bool) {
 					if hasStar {
 						finalName = fmt.Sprintf("* %s", finalName)
 					}
+					finalName = re.ReplaceAllString(finalName, " ")
 					ui.list.SetItemText(i, finalName, idStr)
 
 				case "<-":
@@ -338,6 +344,7 @@ func (ui *TUI) ApplyContactPrefix(id common.Address, option string, add bool) {
 					if hasStar {
 						finalName = fmt.Sprintf("* %s", finalName)
 					}
+					finalName = re.ReplaceAllString(finalName, " ")
 					ui.list.SetItemText(i, finalName, idStr)
 				}
 			}
