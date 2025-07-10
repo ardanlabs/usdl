@@ -172,6 +172,7 @@ func (b *Business) TCPConnections(ctx context.Context) []common.Address {
 	addresses := make([]common.Address, len(users))
 	for i, user := range users {
 		addresses[i] = common.HexToAddress(user)
+		b.log.Info(ctx, "tcp-connections", "user", user)
 	}
 
 	return addresses

@@ -202,18 +202,6 @@ func (ui *TUI) Run() error {
 	return ui.tviewApp.SetRoot(ui.flex, true).EnableMouse(true).Run()
 }
 
-func (ui *TUI) updateState() {
-	state, err := ui.app.GetState(context.Background())
-	if err != nil {
-		fmt.Fprintln(ui.textView, "-----")
-		fmt.Fprintln(ui.textView, "failed to get state: "+err.Error())
-	}
-
-	for _, conn := range state.TCPConnections {
-		ui.ApplyContactPrefix(conn, "<-", true)
-	}
-}
-
 func (ui *TUI) WriteText(msg client.Message) {
 	ui.textView.ScrollToEnd()
 
@@ -355,6 +343,18 @@ func (ui *TUI) ApplyContactPrefix(id common.Address, option string, add bool) {
 }
 
 // =============================================================================
+
+func (ui *TUI) updateState() {
+	state, err := ui.app.GetState(context.Background())
+	if err != nil {
+		fmt.Fprintln(ui.textView, "-----")
+		fmt.Fprintln(ui.textView, "failed to get state: "+err.Error())
+	}
+
+	for _, conn := range state.TCPConnections {
+		ui.ApplyContactPrefix(conn, "->", true)
+	}
+}
 
 func (ui *TUI) agentResponse(from common.Address) {
 	ctx := context.TODO()
