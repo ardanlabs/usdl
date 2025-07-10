@@ -26,13 +26,16 @@ import (
 
 /*
 	CAP to CAP communication
-		- fix: ui coloring issue with connections and drops
-			- We need the handshake for new tcp connections in bind
-		- fix: Drop TCP connections with double click
-		- final testing
+		- Drop TCP connections with double click
+		- Fix: Minor UI issues with arrows
+		- Show in message which protocol is used
 
 	Datafile transfer
 		- Private stream
+		- Encryption
+
+	Terminate TLS Connections
+		- TCP P2P
 
 	Group Chat
 		- Allow users to create groups

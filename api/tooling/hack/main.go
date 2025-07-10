@@ -148,9 +148,11 @@ var keyValue keyType = 0
 
 type tcpSrvHandlers struct{}
 
-func (tcpSrvHandlers) Bind(clt *tcp.Client) {
+func (tcpSrvHandlers) Bind(clt *tcp.Client) error {
 	fmt.Println("***> SERVER: BIND", "TRACEDID", clt.TraceID(), clt.Conn.RemoteAddr().String(), clt.Conn.LocalAddr().String())
 	clt.Reader = bufio.NewReader(clt.Conn)
+
+	return nil
 }
 
 var bill atomic.Int64
@@ -197,9 +199,11 @@ func (tcpSrvHandlers) Drop(clt *tcp.Client) {
 
 type tcpCltHandlers struct{}
 
-func (tcpCltHandlers) Bind(clt *tcp.Client) {
+func (tcpCltHandlers) Bind(clt *tcp.Client) error {
 	fmt.Println("***> CLIENT: BIND", "TRACEDID", clt.TraceID(), clt.Conn.RemoteAddr().String(), clt.Conn.LocalAddr().String())
 	clt.Reader = bufio.NewReader(clt.Conn)
+
+	return nil
 }
 
 func (tcpCltHandlers) Read(clt *tcp.Client) ([]byte, int, error) {
