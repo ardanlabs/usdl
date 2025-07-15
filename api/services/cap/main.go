@@ -26,7 +26,6 @@ import (
 
 /*
 	CAP to CAP communication
-		- Show in message which protocol is used
 		- Marker for when things are encrypted
 		- Write message to disk using our private key
 

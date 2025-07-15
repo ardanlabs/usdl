@@ -75,13 +75,18 @@ func New(myAccountID common.Address, agent *ollamallm.Agent) *TUI {
 			return
 		}
 
-		addrID := common.HexToAddress(id)
+		actID := id
+		if i := strings.Index(id, "]"); i > 0 {
+			actID = id[i+1:]
+		}
+
+		addrID := common.HexToAddress(actID)
 
 		user, err := ui.app.QueryContactByID(addrID)
 		if err != nil {
 			textView.ScrollToEnd()
 			fmt.Fprintln(textView, "-----")
-			fmt.Fprintln(textView, err.Error())
+			fmt.Fprintln(textView, err.Error()+":"+addrID.Hex())
 			return
 		}
 
@@ -95,7 +100,7 @@ func New(myAccountID common.Address, agent *ollamallm.Agent) *TUI {
 		textView.ScrollToEnd()
 
 		name = strings.ReplaceAll(name, "* ", "")
-		list.SetItemText(idx, name, id)
+		ui.list.SetItemText(idx, name, id)
 	})
 
 	// -------------------------------------------------------------------------
@@ -193,7 +198,12 @@ func (ui *TUI) SetApp(app *client.App) {
 
 	for i, user := range app.Contacts() {
 		shortcut := rune(i + 49)
-		ui.list.AddItem(user.Name, user.ID.Hex(), shortcut, nil)
+		switch user.Key {
+		case "":
+			ui.list.AddItem(user.Name, "[red]"+user.ID.Hex(), shortcut, nil)
+		default:
+			ui.list.AddItem(user.Name, "[green]"+user.ID.Hex(), shortcut, nil)
+		}
 	}
 }
 
@@ -213,7 +223,7 @@ func (ui *TUI) WriteText(msg client.Message) {
 
 	case ui.app.ID():
 		idx := ui.list.GetCurrentItem()
-		_, currentID := ui.list.GetItemText(idx)
+		_, currentID := ui.GetItemText(idx)
 
 		if msg.To.Hex() == currentID {
 			fmt.Fprintln(ui.textView, "-----")
@@ -223,7 +233,7 @@ func (ui *TUI) WriteText(msg client.Message) {
 	default:
 		idx := ui.list.GetCurrentItem()
 
-		_, currentID := ui.list.GetItemText(idx)
+		_, currentID := ui.GetItemText(idx)
 		if currentID == "" {
 			fmt.Fprintln(ui.textView, "-----")
 			fmt.Fprintln(ui.textView, "id not found: "+msg.From.Hex())
@@ -246,7 +256,7 @@ func (ui *TUI) WriteText(msg client.Message) {
 		}
 
 		for i := range ui.list.GetItemCount() {
-			name, idStr := ui.list.GetItemText(i)
+			name, idStr := ui.GetItemText(i)
 			if msg.From.Hex() == idStr {
 				if !strings.Contains(name, "*") {
 					ui.list.SetItemText(i, "* "+name, idStr)
@@ -272,7 +282,7 @@ var re = regexp.MustCompile(`\s{2,}`)
 
 func (ui *TUI) ApplyContactPrefix(id common.Address, option string, add bool) {
 	for i := range ui.list.GetItemCount() {
-		name, idStr := ui.list.GetItemText(i)
+		name, idStr := ui.GetItemText(i)
 
 		if id.Hex() == idStr {
 			hasStar := strings.Contains(name, "*")
@@ -389,7 +399,7 @@ func (ui *TUI) agentResponse(from common.Address) {
 
 func (ui *TUI) buttonHandler(to common.Address) {
 	if to == (common.Address{}) {
-		_, id := ui.list.GetItemText(ui.list.GetCurrentItem())
+		_, id := ui.GetItemText(ui.list.GetCurrentItem())
 		to = common.HexToAddress(id)
 	}
 
@@ -441,7 +451,7 @@ func (ui *TUI) aiToggleHandler(agent bool) {
 
 func (ui *TUI) establishUserConnection() {
 	idx := ui.list.GetCurrentItem()
-	name, currentID := ui.list.GetItemText(idx)
+	name, currentID := ui.GetItemText(idx)
 
 	fmt.Fprintln(ui.textView, "-----")
 	fmt.Fprintf(ui.textView, "Establishing Peer Connection with %s\n", name)
@@ -464,4 +474,15 @@ func (ui *TUI) establishUserConnection() {
 	fmt.Fprintf(ui.textView, "TCP connection established with %s\n", name)
 
 	ui.ApplyContactPrefix(common.HexToAddress(currentID), "<-", true)
+}
+
+func (ui *TUI) GetItemText(idx int) (string, string) {
+	name, id := ui.list.GetItemText(idx)
+
+	i := strings.Index(name, "]")
+	if i == -1 {
+		return name, id
+	}
+
+	return name[i+1:], id
 }
