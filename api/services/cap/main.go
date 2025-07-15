@@ -25,9 +25,9 @@ import (
 )
 
 /*
-	CAP to CAP communication
-		- Marker for when things are encrypted
+	MISC
 		- Write message to disk using our private key
+		- Fix agents from responding to tcp connections
 
 	Datafile transfer
 		- Private stream
