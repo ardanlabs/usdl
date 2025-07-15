@@ -479,10 +479,10 @@ func (ui *TUI) establishUserConnection() {
 func (ui *TUI) GetItemText(idx int) (string, string) {
 	name, id := ui.list.GetItemText(idx)
 
-	i := strings.Index(name, "]")
+	i := strings.Index(id, "]")
 	if i == -1 {
 		return name, id
 	}
 
-	return name[i+1:], id
+	return name, id[i+1:]
 }
