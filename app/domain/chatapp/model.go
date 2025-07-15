@@ -17,6 +17,16 @@ func (app *tcpConnRequest) Decode(data []byte) error {
 	return json.Unmarshal(data, app)
 }
 
+type tcpConnDropResponse struct {
+	Connected bool   `json:"connected"`
+	Message   string `json:"message"`
+}
+
+func (app tcpConnDropResponse) Encode() ([]byte, string, error) {
+	data, err := json.Marshal(app)
+	return data, "application/json", err
+}
+
 type stateResponse struct {
 	TCPConnections []common.Address `json:"tcp_connections"`
 }

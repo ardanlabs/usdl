@@ -450,17 +450,25 @@ func (app *App) EstablishTCPConnection(ctx context.Context, tuiUserID common.Add
 	}
 	defer resp.Body.Close()
 
-	switch resp.StatusCode {
-	case http.StatusNoContent:
-		return nil
-
-	case http.StatusConflict:
-		return ErrConnectionDropped
-	}
-
 	data, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return fmt.Errorf("copy error: %w", err)
+	}
+
+	if resp.StatusCode == http.StatusOK {
+		var resp struct {
+			Connected bool   `json:"connected"`
+			Message   string `json:"message"`
+		}
+		if err := json.Unmarshal(data, &resp); err != nil {
+			return fmt.Errorf("failed: response: %s, decoding error: %w ", string(data), err)
+		}
+
+		if resp.Connected {
+			return nil
+		}
+
+		return ErrConnectionDropped
 	}
 
 	var errs *errs.Error

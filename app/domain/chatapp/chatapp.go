@@ -63,11 +63,11 @@ func (a *app) tcpConnectDrop(ctx context.Context, r *http.Request) web.Encoder {
 			if err := a.chat.DropTCPConnection(ctx, tuiUserID); err != nil {
 				return errs.Newf(errs.AlreadyExists, "failed to drop tcp connection: %s", err)
 			}
-			return errs.Newf(errs.AlreadyExists, "client already connected: %s", err)
+			return tcpConnDropResponse{Connected: false, Message: "tcp connection dropped"}
 		}
 
 		return errs.Newf(errs.Internal, "failed to dial tcp connection: %s", err)
 	}
 
-	return nil
+	return tcpConnDropResponse{Connected: true, Message: "tcp connection established"}
 }
