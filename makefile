@@ -9,6 +9,7 @@ install:
 	go install github.com/a-h/templ/cmd/templ@latest
 	brew install entr
 	brew install ollama
+	brew install tailscale
 
 docker:
 	docker pull dyrnq/open-webui:main

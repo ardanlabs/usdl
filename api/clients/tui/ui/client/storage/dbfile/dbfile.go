@@ -177,6 +177,7 @@ func (db *DB) InsertMessage(id common.Address, msg client.Message) error {
 		Name:        msg.Name,
 		Content:     msg.Content,
 		DateCreated: time.Now().UTC(),
+		Encrypted:   msg.Encrypted,
 	}
 
 	if err := flushMsgToDisk(id, m); err != nil {
