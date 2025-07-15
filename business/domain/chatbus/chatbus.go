@@ -4,6 +4,7 @@ package chatbus
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"sync"
 	"time"
@@ -18,8 +19,10 @@ import (
 
 // Set of error variables.
 var (
-	ErrExists    = fmt.Errorf("user exists")
-	ErrNotExists = fmt.Errorf("user doesn't exists")
+	ErrExists                 = fmt.Errorf("user exists")
+	ErrNotExists              = fmt.Errorf("user doesn't exists")
+	ErrClientAlreadyConnected = errors.New("client already connected")
+	ErrClientNotConnected     = errors.New("client not connected")
 )
 
 // UIClientManager defines the set of behavior for user management.
@@ -120,6 +123,9 @@ func (b *Business) DialTCPConnection(ctx context.Context, tuiUserID common.Addre
 
 	client, err := b.tcpCltMgr.Dial(ctx, clientUserID.String(), network, address)
 	if err != nil {
+		if errors.Is(err, tcp.ErrClientAlreadyConnected) {
+			return ErrClientAlreadyConnected
+		}
 		return fmt.Errorf("dial tcp connection: %w", err)
 	}
 

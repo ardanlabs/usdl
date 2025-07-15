@@ -7,6 +7,11 @@ import (
 	"net"
 )
 
+// Set of errors for the TCP client manager.
+var (
+	ErrClientAlreadyConnected = errors.New("client already connected")
+)
+
 // ClientConfig provides a data structure of required configuration parameters.
 type ClientConfig struct {
 	Handlers Handlers // Support for binding and handling requests.
@@ -81,7 +86,7 @@ func (cm *ClientManager) Shutdown(ctx context.Context) error {
 // Dial establishes a new TCP connection to the specified address.
 func (cm *ClientManager) Dial(ctx context.Context, key string, network string, address string) (*Client, error) {
 	if _, err := cm.clients.find(key); err == nil {
-		return nil, errors.New("client already connected")
+		return nil, ErrClientAlreadyConnected
 	}
 
 	conn, err := net.Dial(network, address)

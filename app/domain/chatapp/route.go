@@ -14,5 +14,5 @@ func Routes(app *web.App, log *logger.Logger, chatBus *chatbus.Business, serverA
 
 	app.HandlerFunc(http.MethodGet, "", "/connect", api.connect)
 	app.HandlerFunc(http.MethodGet, "", "/state", api.state)
-	app.HandlerFunc(http.MethodPost, "", "/tcpconnect", api.tcpConnect)
+	app.HandlerFunc(http.MethodPost, "", "/tcpconnectdrop", api.tcpConnectDrop)
 }

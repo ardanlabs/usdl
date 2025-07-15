@@ -3,6 +3,7 @@ package chatapp
 
 import (
 	"context"
+	"errors"
 	"net/http"
 
 	"github.com/ardanlabs/usdl/app/sdk/errs"
@@ -48,7 +49,7 @@ func (a *app) state(ctx context.Context, r *http.Request) web.Encoder {
 	}
 }
 
-func (a *app) tcpConnect(ctx context.Context, r *http.Request) web.Encoder {
+func (a *app) tcpConnectDrop(ctx context.Context, r *http.Request) web.Encoder {
 	var tcpConnReq tcpConnRequest
 	if err := web.Decode(r, &tcpConnReq); err != nil {
 		return errs.Newf(errs.InvalidArgument, "invalid request: %s", err)
@@ -58,6 +59,13 @@ func (a *app) tcpConnect(ctx context.Context, r *http.Request) web.Encoder {
 	clientUserID := common.HexToAddress(tcpConnReq.ClientUserID)
 
 	if err := a.chat.DialTCPConnection(ctx, tuiUserID, clientUserID, "tcp4", tcpConnReq.TCPHost); err != nil {
+		if errors.Is(err, chatbus.ErrClientAlreadyConnected) {
+			if err := a.chat.DropTCPConnection(ctx, tuiUserID); err != nil {
+				return errs.Newf(errs.AlreadyExists, "failed to drop tcp connection: %s", err)
+			}
+			return errs.Newf(errs.AlreadyExists, "client already connected: %s", err)
+		}
+
 		return errs.Newf(errs.Internal, "failed to dial tcp connection: %s", err)
 	}
 

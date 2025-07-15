@@ -3,6 +3,7 @@ package ui
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"math"
 	"math/rand/v2"
@@ -445,8 +446,16 @@ func (ui *TUI) establishUserConnection() {
 	fmt.Fprintf(ui.textView, "Establishing Peer Connection with %s\n", name)
 
 	if err := ui.app.EstablishTCPConnection(context.Background(), ui.app.ID(), common.HexToAddress(currentID)); err != nil {
+		if errors.Is(err, client.ErrConnectionDropped) {
+			fmt.Fprintln(ui.textView, "-----")
+			fmt.Fprintf(ui.textView, "TCP connection dropped for %s\n", name)
+			ui.ApplyContactPrefix(common.HexToAddress(currentID), "<-", false)
+			return
+		}
+
 		fmt.Fprintln(ui.textView, "-----")
 		fmt.Fprintf(ui.textView, "Failed to establish TCP connection: %s\n", err)
+		ui.ApplyContactPrefix(common.HexToAddress(currentID), "<-", false)
 		return
 	}
 

@@ -24,6 +24,8 @@ import (
 	"github.com/gorilla/websocket"
 )
 
+var ErrConnectionDropped = errors.New("connection dropped")
+
 type MyAccount struct {
 	ID          common.Address
 	Name        string
@@ -432,7 +434,7 @@ func (app *App) EstablishTCPConnection(ctx context.Context, tuiUserID common.Add
 		return fmt.Errorf("encoding error: %w", err)
 	}
 
-	url := fmt.Sprintf("http://%s/tcpconnect", app.url)
+	url := fmt.Sprintf("http://%s/tcpconnectdrop", app.url)
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, &b)
 	if err != nil {
@@ -448,8 +450,12 @@ func (app *App) EstablishTCPConnection(ctx context.Context, tuiUserID common.Add
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode == http.StatusNoContent {
+	switch resp.StatusCode {
+	case http.StatusNoContent:
 		return nil
+
+	case http.StatusConflict:
+		return ErrConnectionDropped
 	}
 
 	data, err := io.ReadAll(resp.Body)
