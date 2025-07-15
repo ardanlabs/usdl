@@ -280,8 +280,9 @@ func (ui *TUI) ApplyContactPrefix(id common.Address, option string, add bool) {
 			hasRightArrow := strings.Contains(name, "->")
 
 			name = strings.ReplaceAll(name, "*", "")
-			name = strings.ReplaceAll(name, "->", "")
-			name = strings.ReplaceAll(name, "<-", "")
+			name = strings.ReplaceAll(name, ">", "")
+			name = strings.ReplaceAll(name, "<", "")
+			name = strings.ReplaceAll(name, "-", "")
 
 			switch add {
 			case true:
@@ -295,7 +296,7 @@ func (ui *TUI) ApplyContactPrefix(id common.Address, option string, add bool) {
 						finalName = fmt.Sprintf("* %s", finalName)
 					}
 					finalName = strings.ReplaceAll(finalName, "<- ->", "<->")
-					finalName = re.ReplaceAllString(finalName, " ")
+					finalName = strings.TrimSpace(re.ReplaceAllString(finalName, " "))
 					ui.list.SetItemText(i, finalName, idStr)
 
 				case "<-":
@@ -308,7 +309,7 @@ func (ui *TUI) ApplyContactPrefix(id common.Address, option string, add bool) {
 						finalName = fmt.Sprintf("* %s", finalName)
 					}
 					finalName = strings.ReplaceAll(finalName, "<- ->", "<->")
-					finalName = re.ReplaceAllString(finalName, " ")
+					finalName = strings.TrimSpace(re.ReplaceAllString(finalName, " "))
 					ui.list.SetItemText(i, finalName, idStr)
 				}
 
@@ -322,7 +323,7 @@ func (ui *TUI) ApplyContactPrefix(id common.Address, option string, add bool) {
 					if hasStar {
 						finalName = fmt.Sprintf("* %s", finalName)
 					}
-					finalName = re.ReplaceAllString(finalName, " ")
+					finalName = strings.TrimSpace(re.ReplaceAllString(finalName, " "))
 					ui.list.SetItemText(i, finalName, idStr)
 
 				case "<-":
@@ -333,7 +334,7 @@ func (ui *TUI) ApplyContactPrefix(id common.Address, option string, add bool) {
 					if hasStar {
 						finalName = fmt.Sprintf("* %s", finalName)
 					}
-					finalName = re.ReplaceAllString(finalName, " ")
+					finalName = strings.TrimSpace(re.ReplaceAllString(finalName, " "))
 					ui.list.SetItemText(i, finalName, idStr)
 				}
 			}
