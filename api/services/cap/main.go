@@ -26,7 +26,6 @@ import (
 
 /*
 	MISC
-		- Write message to disk using our private key
 		- Fix agents from responding to tcp connections
 
 	Datafile transfer
