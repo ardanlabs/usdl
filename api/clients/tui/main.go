@@ -29,7 +29,7 @@ func run() error {
 		return fmt.Errorf("id: %w", err)
 	}
 
-	db, err := dbfile.NewDB(configFilePath, id.MyAccountID)
+	db, err := dbfile.NewDB(configFilePath, id)
 	if err != nil {
 		return fmt.Errorf("config: %w", err)
 	}
