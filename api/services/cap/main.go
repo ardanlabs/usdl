@@ -30,12 +30,11 @@ import (
 	MISC
 		- Fix agents from responding to tcp connections
 
-	JWT Support for CAP Endpoints
-		- Secure APP layer endpoints with JWT
-
 	Datafile transfer
-		- Private stream
+		- Use HTTP Form for file uploads
+		- Need to exchange a JWT
 		- Encryption
+		- Have TUI be asked to approve the transfer
 
 	Terminate TLS Connections
 		- TCP P2P
