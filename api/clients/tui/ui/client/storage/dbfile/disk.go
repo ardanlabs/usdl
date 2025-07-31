@@ -35,6 +35,7 @@ type myAccount struct {
 	ID          common.Address `json:"id"`
 	Name        string         `json:"name"`
 	ProfilePath string         `json:"profile_path"`
+	JWT         string         `json:"jwt"`
 }
 
 type dataFileUser struct {
@@ -51,7 +52,7 @@ type dataFile struct {
 	Contacts  []dataFileUser `json:"contacts"`
 }
 
-func newDB(filePath string, myAccountID common.Address) (dataFile, error) {
+func newDB(filePath string, myAccountID common.Address, jwt string) (dataFile, error) {
 	dbFileDir = filepath.Join(filePath, dbDirName)
 	dbMsgsDir = filepath.Join(filePath, dbDirName, dbMsgsDirName)
 	dbFile = filepath.Join(filePath, dbDirName, dbFileName)
@@ -64,7 +65,7 @@ func newDB(filePath string, myAccountID common.Address) (dataFile, error) {
 	_, err := os.Stat(dbFile)
 	switch {
 	case err != nil:
-		df, err = createDBOnDisk(myAccountID)
+		df, err = createDBOnDisk(myAccountID, jwt)
 
 	default:
 		df, err = readDBFromDisk()
@@ -80,7 +81,7 @@ func newDB(filePath string, myAccountID common.Address) (dataFile, error) {
 	return df, nil
 }
 
-func createDBOnDisk(myAccountID common.Address) (dataFile, error) {
+func createDBOnDisk(myAccountID common.Address, jwt string) (dataFile, error) {
 	f, err := os.Create(dbFile)
 	if err != nil {
 		return dataFile{}, fmt.Errorf("config data file create: %w", err)
@@ -92,6 +93,7 @@ func createDBOnDisk(myAccountID common.Address) (dataFile, error) {
 			ID:          myAccountID,
 			Name:        "Anonymous",
 			ProfilePath: "zarf/client/profile/bill.txt",
+			JWT:         jwt,
 		},
 		Contacts: []dataFileUser{
 			{

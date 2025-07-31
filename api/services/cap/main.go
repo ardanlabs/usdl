@@ -14,9 +14,11 @@ import (
 	"time"
 
 	"github.com/ardanlabs/conf/v3"
+	"github.com/ardanlabs/usdl/app/sdk/auth"
 	"github.com/ardanlabs/usdl/app/sdk/mux"
 	"github.com/ardanlabs/usdl/business/domain/chatbus"
 	"github.com/ardanlabs/usdl/business/domain/chatbus/managers/uicltmgr"
+	"github.com/ardanlabs/usdl/foundation/keystore"
 	"github.com/ardanlabs/usdl/foundation/logger"
 	"github.com/ardanlabs/usdl/foundation/tcp"
 	"github.com/ardanlabs/usdl/foundation/web"
@@ -27,6 +29,9 @@ import (
 /*
 	MISC
 		- Fix agents from responding to tcp connections
+
+	JWT Support for CAP Endpoints
+		- Secure APP layer endpoints with JWT
 
 	Datafile transfer
 		- Private stream
@@ -107,6 +112,11 @@ func run(ctx context.Context, log *logger.Logger) error {
 			NetType    string `conf:"default:tcp4"`
 			Addr       string `conf:"default:0.0.0.0:4000"`
 		}
+		Auth struct {
+			KeysFolder string `conf:"default:zarf/client/id/"`
+			ActiveKID  string `conf:"default:key"`
+			Issuer     string `conf:"default:usdl project"`
+		}
 	}{
 		Version: conf.Version{
 			Build: build,
@@ -137,6 +147,27 @@ func run(ctx context.Context, log *logger.Logger) error {
 	log.Info(ctx, "startup", "config", out)
 
 	log.BuildInfo(ctx)
+
+	// -------------------------------------------------------------------------
+	// Initialize authentication support
+
+	log.Info(ctx, "startup", "status", "initializing authentication support")
+
+	ks := keystore.New()
+
+	if _, err := ks.LoadByFileSystem(os.DirFS(cfg.Auth.KeysFolder)); err != nil {
+		return fmt.Errorf("loading keys by fs: %w", err)
+	}
+	authCfg := auth.Config{
+		Log:       log,
+		KeyLookup: ks,
+		Issuer:    cfg.Auth.Issuer,
+	}
+
+	ath, err := auth.New(authCfg)
+	if err != nil {
+		return fmt.Errorf("constructing auth: %w", err)
+	}
 
 	// -------------------------------------------------------------------------
 	// Cap ID
@@ -240,6 +271,7 @@ func run(ctx context.Context, log *logger.Logger) error {
 		Log:        log,
 		ChatBus:    chatBus,
 		ServerAddr: cfg.TCP.Addr,
+		Auth:       ath,
 	}
 
 	webAPI := mux.WebAPI(cfgMux)

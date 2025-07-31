@@ -20,8 +20,8 @@ type DB struct {
 	mu         sync.RWMutex
 }
 
-func NewDB(filePath string, id client.ID) (*DB, error) {
-	df, err := newDB(filePath, id.MyAccountID)
+func NewDB(filePath string, id client.ID, jwt string) (*DB, error) {
+	df, err := newDB(filePath, id.MyAccountID, jwt)
 	if err != nil {
 		return nil, fmt.Errorf("newDB: %w", err)
 	}
@@ -43,6 +43,7 @@ func NewDB(filePath string, id client.ID) (*DB, error) {
 			ID:          df.MyAccount.ID,
 			Name:        df.MyAccount.Name,
 			ProfilePath: df.MyAccount.ProfilePath,
+			JWT:         df.MyAccount.JWT,
 		},
 		privKeyRSA: id.PrivKeyRSA,
 		contacts:   contacts,

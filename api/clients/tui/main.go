@@ -4,16 +4,23 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"time"
 
 	"github.com/ardanlabs/usdl/api/clients/tui/ui"
 	"github.com/ardanlabs/usdl/api/clients/tui/ui/client"
 	"github.com/ardanlabs/usdl/api/clients/tui/ui/client/storage/dbfile"
+	"github.com/ardanlabs/usdl/app/sdk/auth"
 	"github.com/ardanlabs/usdl/foundation/agents/ollamallm"
+	"github.com/ardanlabs/usdl/foundation/keystore"
+	"github.com/golang-jwt/jwt/v4"
 )
 
 const (
 	url            = "localhost:3000"
 	configFilePath = "zarf/client"
+	keysFolder     = "zarf/client/id/"
+	activeKID      = "key"
+	issuer         = "usdl project"
 )
 
 func main() {
@@ -29,7 +36,41 @@ func run() error {
 		return fmt.Errorf("id: %w", err)
 	}
 
-	db, err := dbfile.NewDB(configFilePath, id)
+	// -------------------------------------------------------------------------
+
+	ks := keystore.New()
+
+	if _, err := ks.LoadByFileSystem(os.DirFS(keysFolder)); err != nil {
+		return fmt.Errorf("loading keys by fs: %w", err)
+	}
+	authCfg := auth.Config{
+		Log:       nil,
+		KeyLookup: ks,
+		Issuer:    issuer,
+	}
+
+	ath, err := auth.New(authCfg)
+	if err != nil {
+		return fmt.Errorf("constructing auth: %w", err)
+	}
+
+	tkn, err := ath.GenerateToken(activeKID, auth.Claims{
+		RegisteredClaims: jwt.RegisteredClaims{
+			Subject:   id.MyAccountID.Hex(),
+			Issuer:    issuer,
+			ExpiresAt: jwt.NewNumericDate(time.Now().UTC().Add(8760 * time.Hour)),
+			IssuedAt:  jwt.NewNumericDate(time.Now().UTC()),
+		},
+	})
+	if err != nil {
+		return fmt.Errorf("generating token: %w", err)
+	}
+
+	fmt.Println("JWT:", tkn)
+
+	// -------------------------------------------------------------------------
+
+	db, err := dbfile.NewDB(configFilePath, id, tkn)
 	if err != nil {
 		return fmt.Errorf("config: %w", err)
 	}
@@ -51,7 +92,7 @@ func run() error {
 
 	ui := ui.New(id.MyAccountID, agent)
 
-	app := client.NewApp(db, id, url, ui)
+	app := client.NewApp(db, id, url, ui, tkn)
 	defer app.Close()
 
 	ui.SetApp(app)

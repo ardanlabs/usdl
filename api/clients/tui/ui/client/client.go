@@ -30,6 +30,7 @@ type MyAccount struct {
 	ID          common.Address
 	Name        string
 	ProfilePath string
+	JWT         string
 }
 
 type Message struct {
@@ -99,14 +100,16 @@ type App struct {
 	ui   UI
 	id   ID
 	url  string
+	jwt  string
 	conn *websocket.Conn
 }
 
-func NewApp(db Storage, id ID, url string, ui UI) *App {
+func NewApp(db Storage, id ID, url string, ui UI, jwt string) *App {
 	return &App{
 		db:  db,
 		ui:  ui,
 		id:  id,
+		jwt: jwt,
 		url: url,
 	}
 }
@@ -130,9 +133,12 @@ func (app *App) Run() error {
 func (app *App) Handshake(acct MyAccount) error {
 	url := fmt.Sprintf("ws://%s/connect", app.url)
 
-	conn, _, err := websocket.DefaultDialer.Dial(url, nil)
+	requestHeader := http.Header{}
+	requestHeader.Add("Authorization", "Bearer "+app.jwt)
+
+	conn, resp, err := websocket.DefaultDialer.Dial(url, requestHeader)
 	if err != nil {
-		return fmt.Errorf("dial: %w", err)
+		return fmt.Errorf("dial: %w: %s", err, resp.Status)
 	}
 
 	app.conn = conn
@@ -390,6 +396,7 @@ func (app *App) GetState(ctx context.Context) (StateResponse, error) {
 
 	req.Header.Set("Cache-Control", "no-cache")
 	req.Header.Set("Content-Type", "application/json")
+	req.Header.Add("Authorization", "Bearer "+app.jwt)
 
 	resp, err := defaultClient.Do(req)
 	if err != nil {
@@ -443,6 +450,7 @@ func (app *App) EstablishTCPConnection(ctx context.Context, tuiUserID common.Add
 
 	req.Header.Set("Cache-Control", "no-cache")
 	req.Header.Set("Content-Type", "application/json")
+	req.Header.Add("Authorization", "Bearer "+app.jwt)
 
 	resp, err := defaultClient.Do(req)
 	if err != nil {
