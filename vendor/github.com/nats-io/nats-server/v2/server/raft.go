@@ -142,7 +142,7 @@ type raft struct {
 
 	wal   WAL         // WAL store (filestore or memstore)
 	wtype StorageType // WAL type, e.g. FileStorage or MemoryStorage
-	track bool        //
+	bytes uint64      // Total amount of bytes stored in the WAL. (Saves us from needing to call wal.FastState very often)
 	werr  error       // Last write error
 
 	state       atomic.Int32 // RaftState
@@ -164,33 +164,30 @@ type raft struct {
 	llqrt  time.Time   // Last quorum lost time
 	lsut   time.Time   // Last scale-up time
 
-	term    uint64 // The current vote term
-	pterm   uint64 // Previous term from the last snapshot
-	pindex  uint64 // Previous index from the last snapshot
-	commit  uint64 // Index of the most recent commit
-	applied uint64 // Index of the most recently applied commit
+	term     uint64 // The current vote term
+	pterm    uint64 // Previous term from the last snapshot
+	pindex   uint64 // Previous index from the last snapshot
+	commit   uint64 // Index of the most recent commit
+	applied  uint64 // Index of the most recently applied commit
+	papplied uint64 // First sequence of our log, matches when we last installed a snapshot.
 
 	aflr uint64 // Index when to signal initial messages have been applied after becoming leader. 0 means signaling is disabled.
 
 	leader string // The ID of the leader
 	vote   string // Our current vote state
-	lxfer  bool   // Are we doing a leadership transfer?
-
-	hcbehind bool // Were we falling behind at the last health check? (see: isCurrent)
 
 	s  *Server    // Reference to top-level server
 	c  *client    // Internal client for subscriptions
 	js *jetStream // JetStream, if running, to see if we are out of resources
 
-	dflag       bool        // Debug flag
-	hasleader   atomic.Bool // Is there a group leader right now?
-	pleader     atomic.Bool // Has the group ever had a leader?
-	isSysAcc    atomic.Bool // Are we utilizing the system account?
-	maybeLeader bool        // The group had a preferred leader. And is maybe already acting as leader prior to scale up.
-
-	observer bool // The node is observing, i.e. not participating in voting
+	hasleader atomic.Bool // Is there a group leader right now?
+	pleader   atomic.Bool // Has the group ever had a leader?
+	isSysAcc  atomic.Bool // Are we utilizing the system account?
 
 	extSt extensionState // Extension state
+
+	track bool // Whether out of resources checking is enabled.
+	dflag bool // Debug flag
 
 	psubj  string // Proposals subject
 	rpsubj string // Remove peers subject
@@ -208,9 +205,7 @@ type raft struct {
 	catchup  *catchupState               // For when we need to catch up as a follower.
 	progress map[string]*ipQueue[uint64] // For leader or server catching up a follower.
 
-	paused    bool   // Whether or not applies are paused
-	hcommit   uint64 // The commit at the time that applies were paused
-	pobserver bool   // Whether we were an observer at the time that applies were paused
+	hcommit uint64 // The commit at the time that applies were paused
 
 	prop  *ipQueue[*proposedEntry]       // Proposals
 	entry *ipQueue[*appendEntry]         // Append entries
@@ -220,6 +215,13 @@ type raft struct {
 	votes *ipQueue[*voteResponse]        // Vote responses
 	leadc chan bool                      // Leader changes
 	quit  chan struct{}                  // Raft group shutdown
+
+	lxfer       bool // Are we doing a leadership transfer?
+	hcbehind    bool // Were we falling behind at the last health check? (see: isCurrent)
+	maybeLeader bool // The group had a preferred leader. And is maybe already acting as leader prior to scale up.
+	paused      bool // Whether or not applies are paused
+	observer    bool // The node is observing, i.e. not able to become leader
+	pobserver   bool // Were we previously an observer?
 }
 
 type proposedEntry struct {
@@ -240,9 +242,9 @@ type catchupState struct {
 
 // lps holds peer state of last time and last index replicated.
 type lps struct {
-	ts int64  // Last timestamp
-	li uint64 // Last index replicated
-	kp bool   // Known peer
+	ts time.Time // Last timestamp
+	li uint64    // Last index replicated
+	kp bool      // Known peer
 }
 
 const (
@@ -439,6 +441,7 @@ func (s *Server) initRaftNode(accName string, cfg *RaftConfig, labels pprofLabel
 
 	// Can't recover snapshots if memory based since wal will be reset.
 	// We will inherit from the current leader.
+	n.papplied = 0
 	if _, ok := n.wal.(*memStore); ok {
 		_ = os.RemoveAll(filepath.Join(n.sd, snapshotsDir))
 	} else {
@@ -462,6 +465,8 @@ func (s *Server) initRaftNode(accName string, cfg *RaftConfig, labels pprofLabel
 	// we will try to replay them and process them here.
 	var state StreamState
 	n.wal.FastState(&state)
+	n.bytes = state.Bytes
+
 	if state.Msgs > 0 {
 		n.debug("Replaying state of %d entries", state.Msgs)
 		if first, err := n.loadFirstEntry(); err == nil {
@@ -502,13 +507,13 @@ func (s *Server) initRaftNode(accName string, cfg *RaftConfig, labels pprofLabel
 	}
 
 	// Make sure to track ourselves.
-	n.peers[n.id] = &lps{time.Now().UnixNano(), 0, true}
+	n.peers[n.id] = &lps{time.Now(), 0, true}
 
 	// Track known peers
 	for _, peer := range ps.knownPeers {
 		if peer != n.id {
 			// Set these to 0 to start but mark as known peer.
-			n.peers[peer] = &lps{0, 0, true}
+			n.peers[peer] = &lps{time.Time{}, 0, true}
 		}
 	}
 
@@ -1092,13 +1097,11 @@ func (n *raft) Applied(index uint64) (entries uint64, bytes uint64) {
 
 	// Calculate the number of entries and estimate the byte size that
 	// we can now remove with a compaction/snapshot.
-	var state StreamState
-	n.wal.FastState(&state)
-	if n.applied > state.FirstSeq {
-		entries = n.applied - state.FirstSeq
+	if n.applied > n.papplied {
+		entries = n.applied - n.papplied
 	}
-	if state.Msgs > 0 {
-		bytes = entries * state.Bytes / state.Msgs
+	if n.bytes > 0 {
+		bytes = entries * n.bytes / (n.pindex - n.papplied)
 	}
 	return entries, bytes
 }
@@ -1184,7 +1187,7 @@ func (n *raft) InstallSnapshot(data []byte) error {
 		return errNoSnapAvailable
 	}
 
-	n.debug("Installing snapshot of %d bytes", len(data))
+	n.debug("Installing snapshot of %d bytes [%d:%d]", len(data), term, n.applied)
 
 	return n.installSnapshot(&snapshot{
 		lastTerm:  term,
@@ -1218,6 +1221,10 @@ func (n *raft) installSnapshot(snap *snapshot) error {
 		return err
 	}
 
+	var state StreamState
+	n.wal.FastState(&state)
+	n.papplied = snap.lastIndex
+	n.bytes = state.Bytes
 	return nil
 }
 
@@ -1314,8 +1321,10 @@ func (n *raft) setupLastSnapshot() {
 	// Compact the WAL when we're done if needed.
 	n.pindex = snap.lastIndex
 	n.pterm = snap.lastTerm
+	// Explicitly only set commit, and not applied.
+	// Applied will move up when the snapshot is actually applied.
 	n.commit = snap.lastIndex
-	n.applied = snap.lastIndex
+	n.papplied = snap.lastIndex
 	n.apply.push(newCommittedEntry(n.commit, []*Entry{{EntrySnapshot, snap.data}}))
 	if _, err := n.wal.Compact(snap.lastIndex + 1); err != nil {
 		n.setWriteErrLocked(err)
@@ -1446,9 +1455,8 @@ func (n *raft) isCurrent(includeForwardProgress bool) bool {
 
 	// Check to see that we have heard from the current leader lately.
 	if n.leader != noLeader && n.leader != n.id && n.catchup == nil {
-		okInterval := int64(hbInterval) * 2
-		ts := time.Now().UnixNano()
-		if ps := n.peers[n.leader]; ps == nil || ps.ts == 0 && (ts-ps.ts) > okInterval {
+		okInterval := hbInterval * 2
+		if ps := n.peers[n.leader]; ps == nil || time.Since(ps.ts) > okInterval {
 			n.debug("Not current, no recent leader contact")
 			return false
 		}
@@ -1586,14 +1594,12 @@ func (n *raft) StepDown(preferred ...string) error {
 		preferred = nil
 	}
 
-	nowts := time.Now().UnixNano()
-
 	// If we have a preferred check it first.
 	if maybeLeader != noLeader {
 		var isHealthy bool
 		if ps, ok := n.peers[maybeLeader]; ok {
 			si, ok := n.s.nodeToInfo.Load(maybeLeader)
-			isHealthy = ok && !si.(nodeInfo).offline && (nowts-ps.ts) < int64(hbInterval*3)
+			isHealthy = ok && !si.(nodeInfo).offline && time.Since(ps.ts) < hbInterval*3
 		}
 		if !isHealthy {
 			maybeLeader = noLeader
@@ -1608,7 +1614,7 @@ func (n *raft) StepDown(preferred ...string) error {
 				continue
 			}
 			si, ok := n.s.nodeToInfo.Load(peer)
-			isHealthy := ok && !si.(nodeInfo).offline && (nowts-ps.ts) < int64(hbInterval*3)
+			isHealthy := ok && !si.(nodeInfo).offline && time.Since(ps.ts) < hbInterval*3
 			if isHealthy {
 				maybeLeader = peer
 				break
@@ -1699,12 +1705,12 @@ func (n *raft) Progress() (index, commit, applied uint64) {
 }
 
 // Size returns number of entries and total bytes for our WAL.
-func (n *raft) Size() (uint64, uint64) {
+func (n *raft) Size() (entries uint64, bytes uint64) {
 	n.RLock()
-	var state StreamState
-	n.wal.FastState(&state)
+	entries = n.pindex - n.papplied
+	bytes = n.bytes
 	n.RUnlock()
-	return state.Msgs, state.Bytes
+	return entries, bytes
 }
 
 func (n *raft) ID() string {
@@ -1733,7 +1739,7 @@ func (n *raft) Peers() []*Peer {
 		p := &Peer{
 			ID:      id,
 			Current: id == n.leader || ps.li >= n.applied,
-			Last:    time.Unix(0, ps.ts),
+			Last:    ps.ts,
 			Lag:     lag,
 		}
 		peers = append(peers, p)
@@ -1960,7 +1966,7 @@ func (n *raft) run() {
 	n.apply.push(nil)
 
 runner:
-	for s.isRunning() {
+	for {
 		switch n.State() {
 		case Follower:
 			n.runAsFollower()
@@ -2212,12 +2218,13 @@ var aePool = sync.Pool{
 // appendEntry is the main struct that is used to sync raft peers.
 type appendEntry struct {
 	leader  string   // The leader that this append entry came from.
-	term    uint64   // The current term, as the leader understands it.
-	commit  uint64   // The commit index, as the leader understands it.
+	term    uint64   // The term when this entry was stored.
+	commit  uint64   // The commit index of the leader when this append entry was sent.
 	pterm   uint64   // The previous term, for checking consistency.
 	pindex  uint64   // The previous commit index, for checking consistency.
 	entries []*Entry // Entries to process.
 	// Below fields are for internal use only:
+	lterm uint64        // The highest term for catchups only, as the leader understands it. (If lterm=0, use term instead)
 	reply string        // Reply subject to respond to once committed.
 	sub   *subscription // The subscription that the append entry came in on.
 	buf   []byte
@@ -2227,7 +2234,7 @@ type appendEntry struct {
 func newAppendEntry(leader string, term, commit, pterm, pindex uint64, entries []*Entry) *appendEntry {
 	ae := aePool.Get().(*appendEntry)
 	ae.leader, ae.term, ae.commit, ae.pterm, ae.pindex, ae.entries = leader, term, commit, pterm, pindex, entries
-	ae.reply, ae.sub, ae.buf = _EMPTY_, nil, nil
+	ae.lterm, ae.reply, ae.sub, ae.buf = 0, _EMPTY_, nil, nil
 	return ae
 }
 
@@ -2309,36 +2316,47 @@ func (ae *appendEntry) encode(b []byte) ([]byte, error) {
 		return nil, errTooManyEntries
 	}
 
-	var elen int
+	var elen uint64
 	for _, e := range ae.entries {
-		elen += len(e.Data) + 1 + 4 // 1 is type, 4 is for size.
+		// MaxInt32 instead of MaxUint32 deliberate here to stop int
+		// overflow on 32-bit platforms, still gives us ~2GB limit.
+		ulen := uint64(len(e.Data))
+		if ulen > math.MaxInt32 {
+			return nil, errBadAppendEntry
+		}
+		elen += ulen + 1 + 4 // 1 is type, 4 is for size.
 	}
-	tlen := appendEntryBaseLen + elen + 1
+	// Uvarint for lterm can be a maximum 10 bytes for a uint64.
+	var _lterm [10]byte
+	lterm := _lterm[:binary.PutUvarint(_lterm[:], ae.lterm)]
+	tlen := appendEntryBaseLen + elen + uint64(len(lterm))
 
 	var buf []byte
-	if cap(b) >= tlen {
-		buf = b[:tlen]
+	if uint64(cap(b)) >= tlen {
+		buf = b[:idLen]
 	} else {
-		buf = make([]byte, tlen)
+		buf = make([]byte, idLen, tlen)
 	}
 
 	var le = binary.LittleEndian
 	copy(buf[:idLen], ae.leader)
-	le.PutUint64(buf[8:], ae.term)
-	le.PutUint64(buf[16:], ae.commit)
-	le.PutUint64(buf[24:], ae.pterm)
-	le.PutUint64(buf[32:], ae.pindex)
-	le.PutUint16(buf[40:], uint16(len(ae.entries)))
-	wi := 42
+	buf = le.AppendUint64(buf, ae.term)
+	buf = le.AppendUint64(buf, ae.commit)
+	buf = le.AppendUint64(buf, ae.pterm)
+	buf = le.AppendUint64(buf, ae.pindex)
+	buf = le.AppendUint16(buf, uint16(len(ae.entries)))
 	for _, e := range ae.entries {
-		le.PutUint32(buf[wi:], uint32(len(e.Data)+1))
-		wi += 4
-		buf[wi] = byte(e.Type)
-		wi++
-		copy(buf[wi:], e.Data)
-		wi += len(e.Data)
+		// The +1 is safe here as we've already checked len(e.Data)
+		// is not greater than MaxInt32, which is less than MaxUint32.
+		buf = le.AppendUint32(buf, uint32(1+len(e.Data)))
+		buf = append(buf, byte(e.Type))
+		buf = append(buf, e.Data...)
 	}
-	return buf[:wi], nil
+	// This is safe because old nodes will ignore bytes after the
+	// encoded messages. Nodes that are aware of this will decode
+	// it correctly.
+	buf = append(buf, lterm...)
+	return buf, nil
 }
 
 // This can not be used post the wire level callback since we do not copy.
@@ -2353,19 +2371,24 @@ func (n *raft) decodeAppendEntry(msg []byte, sub *subscription, reply string) (*
 	ae.reply, ae.sub = reply, sub
 
 	// Decode Entries.
-	ne, ri := int(le.Uint16(msg[40:])), 42
-	for i, max := 0, len(msg); i < ne; i++ {
+	ne, ri := int(le.Uint16(msg[40:])), uint64(42)
+	for i, max := 0, uint64(len(msg)); i < ne; i++ {
 		if ri >= max-1 {
 			return nil, errBadAppendEntry
 		}
-		le := int(le.Uint32(msg[ri:]))
+		ml := uint64(le.Uint32(msg[ri:]))
 		ri += 4
-		if le <= 0 || ri+le > max {
+		if ml <= 0 || ri+ml > max {
 			return nil, errBadAppendEntry
 		}
-		entry := newEntry(EntryType(msg[ri]), msg[ri+1:ri+le])
+		entry := newEntry(EntryType(msg[ri]), msg[ri+1:ri+ml])
 		ae.entries = append(ae.entries, entry)
-		ri += le
+		ri += ml
+	}
+	if len(msg[ri:]) > 0 {
+		if lterm, n := binary.Uvarint(msg[ri:]); n > 0 {
+			ae.lterm = lterm
+		}
 	}
 	ae.buf = msg
 	return ae, nil
@@ -2616,11 +2639,10 @@ func (n *raft) Quorum() bool {
 	n.RLock()
 	defer n.RUnlock()
 
-	now, nc := time.Now().UnixNano(), 0
+	nc := 0
 	for id, peer := range n.peers {
-		if id == n.id || time.Duration(now-peer.ts) < lostQuorumInterval {
-			nc++
-			if nc >= n.qn {
+		if id == n.id || time.Since(peer.ts) < lostQuorumInterval {
+			if nc++; nc >= n.qn {
 				return true
 			}
 		}
@@ -2642,11 +2664,10 @@ func (n *raft) lostQuorumLocked() bool {
 		return false
 	}
 
-	now, nc := time.Now().UnixNano(), 0
+	nc := 0
 	for id, peer := range n.peers {
-		if id == n.id || time.Duration(now-peer.ts) < lostQuorumInterval {
-			nc++
-			if nc >= n.qn {
+		if id == n.id || time.Since(peer.ts) < lostQuorumInterval {
+			if nc++; nc >= n.qn {
 				return false
 			}
 		}
@@ -2679,7 +2700,7 @@ func (n *raft) loadFirstEntry() (ae *appendEntry, err error) {
 func (n *raft) runCatchup(ar *appendEntryResponse, indexUpdatesQ *ipQueue[uint64]) {
 	n.RLock()
 	s, reply := n.s, n.areply
-	peer, subj, last := ar.peer, ar.reply, n.pindex
+	peer, subj, term, pterm, last := ar.peer, ar.reply, n.term, n.pterm, n.pindex
 	n.RUnlock()
 
 	defer s.grWG.Done()
@@ -2701,7 +2722,7 @@ func (n *raft) runCatchup(ar *appendEntryResponse, indexUpdatesQ *ipQueue[uint64
 		indexUpdatesQ.unregister()
 	}()
 
-	n.debug("Running catchup for %q", peer)
+	n.debug("Running catchup for %q [%d:%d] to [%d:%d]", peer, ar.term, ar.index, pterm, last)
 
 	const maxOutstanding = 2 * 1024 * 1024 // 2MB for now.
 	next, total, om := uint64(0), 0, make(map[uint64]int)
@@ -2718,6 +2739,14 @@ func (n *raft) runCatchup(ar *appendEntryResponse, indexUpdatesQ *ipQueue[uint64
 					n.warn("Got an error loading %d index: %v", next, err)
 				}
 				return true
+			}
+			// Re-encode with the lterm if needed
+			if ae.lterm != term {
+				ae.lterm = term
+				if ae.buf, err = ae.encode(ae.buf[:0]); err != nil {
+					n.warn("Got an error re-encoding append entry: %v", err)
+					return true
+				}
 			}
 			// Update our tracking total.
 			om[next] = len(ae.buf)
@@ -2899,9 +2928,7 @@ func (n *raft) applyCommit(index uint64) error {
 
 	ae := n.pae[index]
 	if ae == nil {
-		var state StreamState
-		n.wal.FastState(&state)
-		if index < state.FirstSeq {
+		if index < n.papplied {
 			return nil
 		}
 		var err error
@@ -2954,7 +2981,7 @@ func (n *raft) applyCommit(index uint64) error {
 
 			if lp, ok := n.peers[newPeer]; !ok {
 				// We are not tracking this one automatically so we need to bump cluster size.
-				n.peers[newPeer] = &lps{time.Now().UnixNano(), 0, true}
+				n.peers[newPeer] = &lps{time.Now(), 0, true}
 			} else {
 				// Mark as added.
 				lp.kp = true
@@ -3014,6 +3041,12 @@ func (n *raft) trackResponse(ar *appendEntryResponse) {
 	}
 
 	n.Lock()
+
+	// Check state under lock, we might not be leader anymore.
+	if n.State() != Leader {
+		n.Unlock()
+		return
+	}
 
 	// Update peer's last index.
 	if ps := n.peers[ar.peer]; ps != nil && ar.index > ps.li {
@@ -3104,9 +3137,9 @@ func (n *raft) trackPeer(peer string) error {
 		}
 	}
 	if ps := n.peers[peer]; ps != nil {
-		ps.ts = time.Now().UnixNano()
+		ps.ts = time.Now()
 	} else if !isRemoved {
-		n.peers[peer] = &lps{time.Now().UnixNano(), 0, false}
+		n.peers[peer] = &lps{time.Now(), 0, false}
 	}
 	n.Unlock()
 
@@ -3190,7 +3223,7 @@ func (n *raft) runAsCandidate() {
 
 // handleAppendEntry handles an append entry from the wire. This function
 // is an internal callback from the "asubj" append entry subscription.
-func (n *raft) handleAppendEntry(sub *subscription, c *client, _ *Account, subject, reply string, msg []byte) {
+func (n *raft) handleAppendEntry(sub *subscription, c *client, _ *Account, _, reply string, msg []byte) {
 	msg = copyBytes(msg)
 	if ae, err := n.decodeAppendEntry(msg, sub, reply); err == nil {
 		// Push to the new entry channel. From here one of the worker
@@ -3259,7 +3292,11 @@ func (n *raft) truncateWAL(term, index uint64) {
 	n.debug("Truncating and repairing WAL to Term %d Index %d", term, index)
 
 	if term == 0 && index == 0 {
-		n.warn("Resetting WAL state")
+		if n.commit > 0 {
+			n.warn("Resetting WAL state")
+		} else {
+			n.debug("Clearing WAL state (no commits)")
+		}
 	}
 
 	defer func() {
@@ -3276,24 +3313,15 @@ func (n *raft) truncateWAL(term, index uint64) {
 		if n.applied > n.commit {
 			n.applied = n.commit
 		}
+		if n.papplied > n.applied {
+			n.papplied = n.applied
+		}
 	}()
 
 	if err := n.wal.Truncate(index); err != nil {
-		// If we get an invalid sequence, reset our wal all together.
-		// We will not have holes, so this means we do not have this message stored anymore.
-		// This is normal when truncating back to applied/snapshot.
-		if err == ErrInvalidSequence {
-			n.debug("Clearing WAL")
-			n.wal.Truncate(0)
-			// If our index is non-zero use PurgeEx to set us to the correct next index.
-			if index > 0 {
-				n.wal.PurgeEx(fwcs, index+1, 0)
-			}
-		} else {
-			n.warn("Error truncating WAL: %v", err)
-			n.setWriteErrLocked(err)
-			return
-		}
+		n.warn("Error truncating WAL: %v", err)
+		n.setWriteErrLocked(err)
+		return
 	}
 	// Set after we know we have truncated properly.
 	n.pterm, n.pindex = term, index
@@ -3397,9 +3425,9 @@ func (n *raft) processAppendEntry(ae *appendEntry, sub *subscription) {
 	// Track leader directly
 	if isNew && ae.leader != noLeader {
 		if ps := n.peers[ae.leader]; ps != nil {
-			ps.ts = time.Now().UnixNano()
+			ps.ts = time.Now()
 		} else {
-			n.peers[ae.leader] = &lps{time.Now().UnixNano(), 0, true}
+			n.peers[ae.leader] = &lps{time.Now(), 0, true}
 		}
 	}
 
@@ -3412,12 +3440,13 @@ func (n *raft) processAppendEntry(ae *appendEntry, sub *subscription) {
 	}
 
 	// Check state if we are catching up.
+	var resetCatchingUp bool
 	if catchingUp {
 		if cs := n.catchup; cs != nil && n.pterm >= cs.cterm && n.pindex >= cs.cindex {
 			// If we are here we are good, so if we have a catchup pending we can cancel.
 			n.cancelCatchup()
 			// Reset our notion of catching up.
-			catchingUp = false
+			resetCatchingUp = true
 		} else if isNew {
 			var ar *appendEntryResponse
 			var inbox string
@@ -3437,9 +3466,17 @@ func (n *raft) processAppendEntry(ae *appendEntry, sub *subscription) {
 		}
 	}
 
+	// Grab term from append entry. But if leader explicitly defined its term, use that instead.
+	// This is required during catchup if the leader catches us up on older items from previous terms.
+	// While still allowing us to confirm they're matching our highest known term.
+	lterm := ae.term
+	if ae.lterm != 0 {
+		lterm = ae.lterm
+	}
+
 	// If this term is greater than ours.
-	if ae.term > n.term {
-		n.term = ae.term
+	if lterm > n.term {
+		n.term = lterm
 		n.vote = noVote
 		if isNew {
 			n.writeTermVote()
@@ -3448,13 +3485,21 @@ func (n *raft) processAppendEntry(ae *appendEntry, sub *subscription) {
 			n.debug("Term higher than ours and we are not a follower: %v, stepping down to %q", n.State(), ae.leader)
 			n.stepdownLocked(ae.leader)
 		}
-	} else if ae.term < n.term && !catchingUp && isNew {
-		n.debug("Rejected AppendEntry from a leader (%s) with term %d which is less than ours", ae.leader, ae.term)
+	} else if lterm < n.term && sub != nil && !(catchingUp && ae.lterm == 0) {
+		// Anything that's below our expected highest term needs to be rejected.
+		// Unless we're replaying (sub=nil), in which case we'll always continue.
+		// For backward-compatibility we shouldn't reject if we're being caught up by an old server.
+		n.debug("Rejected AppendEntry from a leader (%s) with term %d which is less than ours", ae.leader, lterm)
 		ar := newAppendEntryResponse(n.term, n.pindex, n.id, false)
 		n.Unlock()
 		n.sendRPC(ae.reply, _EMPTY_, ar.encode(arbuf))
 		arPool.Put(ar)
 		return
+	}
+
+	// Reset after checking the term is correct, because we use catchingUp in a condition above.
+	if resetCatchingUp {
+		catchingUp = false
 	}
 
 	if isNew && n.leader != ae.leader && n.State() == Follower {
@@ -3468,29 +3513,39 @@ func (n *raft) processAppendEntry(ae *appendEntry, sub *subscription) {
 	if ae.pterm != n.pterm || ae.pindex != n.pindex {
 		// Check if this is a lower or equal index than what we were expecting.
 		if ae.pindex <= n.pindex {
-			n.debug("AppendEntry detected pindex less than/equal to ours: %d:%d vs %d:%d", ae.pterm, ae.pindex, n.pterm, n.pindex)
+			n.debug("AppendEntry detected pindex less than/equal to ours: [%d:%d] vs [%d:%d]", ae.pterm, ae.pindex, n.pterm, n.pindex)
 			var ar *appendEntryResponse
 			var success bool
 
 			if ae.pindex < n.commit {
 				// If we have already committed this entry, just mark success.
 				success = true
+				n.debug("AppendEntry pindex %d below commit %d, marking success", ae.pindex, n.commit)
 			} else if eae, _ := n.loadEntry(ae.pindex); eae == nil {
 				// If terms are equal, and we are not catching up, we have simply already processed this message.
 				// So we will ACK back to the leader. This can happen on server restarts based on timings of snapshots.
 				if ae.pterm == n.pterm && !catchingUp {
 					success = true
+					n.debug("AppendEntry pindex %d already processed, marking success", ae.pindex, n.commit)
 				} else if ae.pindex == n.pindex {
 					// Check if only our terms do not match here.
 					// Make sure pterms match and we take on the leader's.
 					// This prevents constant spinning.
 					n.truncateWAL(ae.pterm, ae.pindex)
-				} else if ae.pindex == n.applied {
-					// Entry can't be found, this is normal because we have a snapshot at this index.
-					// Truncate back to where we've created the snapshot.
-					n.truncateWAL(ae.pterm, ae.pindex)
 				} else {
-					n.resetWAL()
+					snap, err := n.loadLastSnapshot()
+					if err == nil && snap.lastIndex == ae.pindex && snap.lastTerm == ae.pterm {
+						// Entry can't be found, this is normal because we have a snapshot at this index.
+						// Truncate back to where we've created the snapshot.
+						n.truncateWAL(snap.lastTerm, snap.lastIndex)
+						// Only continue if truncation was successful, and we ended up such that we can safely continue.
+						if ae.pterm == n.pterm && ae.pindex == n.pindex {
+							goto CONTINUE
+						}
+					} else {
+						// Otherwise, something has gone very wrong and we need to reset.
+						n.resetWAL()
+					}
 				}
 			} else if eae.term == ae.pterm {
 				// If terms match we can delete all entries past this one, and then continue storing the current entry.
@@ -3547,12 +3602,6 @@ func (n *raft) processAppendEntry(ae *appendEntry, sub *subscription) {
 			n.pterm = ae.pterm
 			n.commit = ae.pindex
 
-			if _, err := n.wal.Compact(n.pindex + 1); err != nil {
-				n.setWriteErrLocked(err)
-				n.Unlock()
-				return
-			}
-
 			snap := &snapshot{
 				lastTerm:  n.pterm,
 				lastIndex: n.pindex,
@@ -3573,7 +3622,7 @@ func (n *raft) processAppendEntry(ae *appendEntry, sub *subscription) {
 		}
 
 		// Setup our state for catching up.
-		n.debug("AppendEntry did not match %d %d with %d %d", ae.pterm, ae.pindex, n.pterm, n.pindex)
+		n.debug("AppendEntry did not match [%d:%d] with [%d:%d]", ae.pterm, ae.pindex, n.pterm, n.pindex)
 		inbox := n.createCatchup(ae)
 		ar := newAppendEntryResponse(n.pterm, n.pindex, n.id, false)
 		n.Unlock()
@@ -3643,9 +3692,9 @@ CONTINUE:
 			if newPeer := string(e.Data); len(newPeer) == idLen {
 				// Track directly, but wait for commit to be official
 				if ps := n.peers[newPeer]; ps != nil {
-					ps.ts = time.Now().UnixNano()
+					ps.ts = time.Now()
 				} else {
-					n.peers[newPeer] = &lps{time.Now().UnixNano(), 0, false}
+					n.peers[newPeer] = &lps{time.Now(), 0, false}
 				}
 				// Store our peer in our global peer map for all peers.
 				peers.LoadOrStore(newPeer, newPeer)
@@ -3671,8 +3720,10 @@ CONTINUE:
 		}
 	}
 
+	// Only ever respond to new entries.
+	// Never respond to catchup messages, because providing quorum based on this is unsafe.
 	var ar *appendEntryResponse
-	if sub != nil {
+	if sub != nil && isNew {
 		ar = newAppendEntryResponse(n.pterm, n.pindex, n.id, true)
 	}
 	n.Unlock()
@@ -3700,7 +3751,7 @@ func (n *raft) processPeerState(ps *peerState) {
 			lp.kp = true
 			n.peers[peer] = lp
 		} else {
-			n.peers[peer] = &lps{0, 0, true}
+			n.peers[peer] = &lps{time.Time{}, 0, true}
 		}
 	}
 	n.debug("Update peers from leader to %+v", n.peers)
@@ -3715,11 +3766,19 @@ func (n *raft) processAppendEntryResponse(ar *appendEntryResponse) {
 
 	if ar.success {
 		// The remote node successfully committed the append entry.
+		// They agree with our leadership and are happy with the state of the log.
+		// In this case ar.term doesn't matter.
 		n.trackResponse(ar)
 		arPool.Put(ar)
+	} else if ar.reply != _EMPTY_ {
+		// The remote node didn't commit the append entry, and they believe they
+		// are behind and have specified a reply subject, so let's try to catch them up.
+		// In this case ar.term was populated with the remote's pterm.
+		n.catchupFollower(ar)
 	} else if ar.term > n.term {
 		// The remote node didn't commit the append entry, it looks like
 		// they are on a newer term than we are. Step down.
+		// In this case ar.term was populated with the remote's term.
 		n.Lock()
 		n.term = ar.term
 		n.vote = noVote
@@ -3728,10 +3787,9 @@ func (n *raft) processAppendEntryResponse(ar *appendEntryResponse) {
 		n.stepdownLocked(noLeader)
 		n.Unlock()
 		arPool.Put(ar)
-	} else if ar.reply != _EMPTY_ {
-		// The remote node didn't commit the append entry and they are
-		// still on the same term, so let's try to catch them up.
-		n.catchupFollower(ar)
+	} else {
+		// Ignore, but return back to pool.
+		arPool.Put(ar)
 	}
 }
 
@@ -3780,6 +3838,13 @@ func (n *raft) storeToWAL(ae *appendEntry) error {
 		return errEntryStoreFailed
 	}
 
+	var sz uint64
+	if n.wtype == FileStorage {
+		sz = fileStoreMsgSize(_EMPTY_, nil, ae.buf)
+	} else {
+		sz = memStoreMsgSize(_EMPTY_, nil, ae.buf)
+	}
+	n.bytes += sz
 	n.pterm = ae.term
 	n.pindex = seq
 	return nil
@@ -4027,7 +4092,6 @@ func (n *raft) setWriteErrLocked(err error) {
 	// Ignore non-write errors.
 	if err == ErrStoreClosed ||
 		err == ErrStoreEOF ||
-		err == ErrInvalidSequence ||
 		err == ErrStoreMsgNotFound ||
 		err == errNoPending ||
 		err == errPartialCache {
@@ -4372,11 +4436,8 @@ func (n *raft) switchToLeader() {
 
 	n.debug("Switching to leader")
 
-	var state StreamState
-	n.wal.FastState(&state)
-
 	// Check if we have items pending as we are taking over.
-	sendHB := state.LastSeq > n.commit
+	sendHB := n.pindex > n.commit
 
 	n.lxfer = false
 	n.updateLeader(n.id)

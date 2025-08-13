@@ -24,6 +24,7 @@ import (
 	"unsafe"
 
 	"github.com/nats-io/nats-server/v2/server/avl"
+	"github.com/nats-io/nats-server/v2/server/gsl"
 )
 
 // StorageType determines how messages are stored for retention.
@@ -60,8 +61,6 @@ var (
 	ErrStoreWrongType = errors.New("wrong storage type")
 	// ErrNoAckPolicy is returned when trying to update a consumer's acks with no ack policy.
 	ErrNoAckPolicy = errors.New("ack policy is none")
-	// ErrInvalidSequence is returned when the sequence is not present in the stream store.
-	ErrInvalidSequence = errors.New("invalid sequence")
 	// ErrSequenceMismatch is returned when storing a raw message and the expected sequence is wrong.
 	ErrSequenceMismatch = errors.New("expected sequence does not match store")
 	// ErrCorruptStreamState
@@ -97,7 +96,7 @@ type StreamStore interface {
 	SkipMsgs(seq uint64, num uint64) error
 	LoadMsg(seq uint64, sm *StoreMsg) (*StoreMsg, error)
 	LoadNextMsg(filter string, wc bool, start uint64, smp *StoreMsg) (sm *StoreMsg, skip uint64, err error)
-	LoadNextMsgMulti(sl *Sublist, start uint64, smp *StoreMsg) (sm *StoreMsg, skip uint64, err error)
+	LoadNextMsgMulti(sl *gsl.SimpleSublist, start uint64, smp *StoreMsg) (sm *StoreMsg, skip uint64, err error)
 	LoadLastMsg(subject string, sm *StoreMsg) (*StoreMsg, error)
 	LoadPrevMsg(start uint64, smp *StoreMsg) (sm *StoreMsg, err error)
 	RemoveMsg(seq uint64) (bool, error)
@@ -112,8 +111,9 @@ type StreamStore interface {
 	SubjectsTotals(filterSubject string) map[string]uint64
 	AllLastSeqs() ([]uint64, error)
 	MultiLastSeqs(filters []string, maxSeq uint64, maxAllowed int) ([]uint64, error)
+	SubjectForSeq(seq uint64) (string, error)
 	NumPending(sseq uint64, filter string, lastPerSubject bool) (total, validThrough uint64)
-	NumPendingMulti(sseq uint64, sl *Sublist, lastPerSubject bool) (total, validThrough uint64)
+	NumPendingMulti(sseq uint64, sl *gsl.SimpleSublist, lastPerSubject bool) (total, validThrough uint64)
 	State() StreamState
 	FastState(*StreamState)
 	EncodedStreamState(failed uint64) (enc []byte, err error)

@@ -30,6 +30,7 @@ import (
 	"time"
 
 	"github.com/nats-io/nats-server/v2/server/avl"
+	"github.com/nats-io/nats-server/v2/server/gsl"
 	"github.com/nats-io/nuid"
 	"golang.org/x/time/rate"
 )
@@ -402,15 +403,15 @@ type consumer struct {
 	sid               int
 	name              string
 	stream            string
-	sseq              uint64         // next stream sequence
-	subjf             subjectFilters // subject filters and their sequences
-	filters           *Sublist       // When we have multiple filters we will use LoadNextMsgMulti and pass this in.
-	dseq              uint64         // delivered consumer sequence
-	adflr             uint64         // ack delivery floor
-	asflr             uint64         // ack store floor
-	chkflr            uint64         // our check floor, interest streams only.
-	npc               int64          // Num Pending Count
-	npf               uint64         // Num Pending Floor Sequence
+	sseq              uint64             // next stream sequence
+	subjf             subjectFilters     // subject filters and their sequences
+	filters           *gsl.SimpleSublist // When we have multiple filters we will use LoadNextMsgMulti and pass this in.
+	dseq              uint64             // delivered consumer sequence
+	adflr             uint64             // ack delivery floor
+	asflr             uint64             // ack store floor
+	chkflr            uint64             // our check floor, interest streams only.
+	npc               int64              // Num Pending Count
+	npf               uint64             // Num Pending Floor Sequence
 	dsubj             string
 	qgroup            string
 	lss               *lastSeqSkipList
@@ -436,7 +437,8 @@ type consumer struct {
 	rdqi              avl.SequenceSet
 	rdc               map[uint64]uint64
 	replies           map[uint64]string
-	pendingDeliveries map[uint64]*jsPubMsg // Messages that can be delivered after achieving quorum.
+	pendingDeliveries map[uint64]*jsPubMsg        // Messages that can be delivered after achieving quorum.
+	waitingDeliveries map[string]*waitingDelivery // (Optional) request timeout messages that need to wait for replicated deliveries first.
 	maxdc             uint64
 	waiting           *waitQueue
 	cfg               ConsumerConfig
@@ -818,6 +820,9 @@ func checkConsumerCfg(
 	}
 
 	if config.PriorityPolicy != PriorityNone {
+		if config.DeliverSubject != "" {
+			return NewJSConsumerPushWithPriorityGroupError()
+		}
 		if len(config.PriorityGroups) == 0 {
 			return NewJSConsumerPriorityPolicyWithoutGroupError()
 		}
@@ -1098,9 +1103,9 @@ func (mset *stream) addConsumerWithAssignment(config *ConsumerConfig, oname stri
 	// If we have multiple filter subjects, create a sublist which we will use
 	// in calling store.LoadNextMsgMulti.
 	if len(o.cfg.FilterSubjects) > 0 {
-		o.filters = NewSublistNoCache()
+		o.filters = gsl.NewSublist[struct{}]()
 		for _, filter := range o.cfg.FilterSubjects {
-			o.filters.Insert(&subscription{subject: []byte(filter)})
+			o.filters.Insert(filter, struct{}{})
 		}
 	} else {
 		// Make sure this is nil otherwise.
@@ -1845,7 +1850,7 @@ func (o *consumer) deleteNotActive() {
 	} else {
 		// Pull mode.
 		elapsed := time.Since(o.waiting.last)
-		if elapsed <= o.cfg.InactiveThreshold {
+		if elapsed < o.dthresh {
 			// These need to keep firing so reset but use delta.
 			if o.dtmr != nil {
 				o.dtmr.Reset(o.dthresh - elapsed)
@@ -1861,6 +1866,43 @@ func (o *consumer) deleteNotActive() {
 				o.dtmr.Reset(o.dthresh)
 			} else {
 				o.dtmr = time.AfterFunc(o.dthresh, o.deleteNotActive)
+			}
+			o.mu.Unlock()
+			return
+		}
+
+		// We now know we have no waiting requests, and our last request was long ago.
+		// However, based on AckWait the consumer could still be actively processing,
+		// even if we haven't been informed if there were no acks in the meantime.
+		// We must wait for the message that expires last and start counting down the
+		// inactive threshold from there.
+		now := time.Now().UnixNano()
+		l := len(o.cfg.BackOff)
+		var delay time.Duration
+		var ackWait time.Duration
+		for _, p := range o.pending {
+			if l == 0 {
+				ackWait = o.ackWait(0)
+			} else {
+				bi := int(o.rdc[p.Sequence])
+				if bi < 0 {
+					bi = 0
+				} else if bi >= l {
+					bi = l - 1
+				}
+				ackWait = o.ackWait(o.cfg.BackOff[bi])
+			}
+			if ts := p.Timestamp + ackWait.Nanoseconds() + o.dthresh.Nanoseconds(); ts > now {
+				delay = max(delay, time.Duration(ts-now))
+			}
+		}
+		// We'll wait for the latest time we expect an ack, plus the inactive threshold.
+		// Acknowledging a message will reset this back down to just the inactive threshold.
+		if delay > 0 {
+			if o.dtmr != nil {
+				o.dtmr.Reset(delay)
+			} else {
+				o.dtmr = time.AfterFunc(delay, o.deleteNotActive)
 			}
 			o.mu.Unlock()
 			return
@@ -2255,9 +2297,9 @@ func (o *consumer) updateConfig(cfg *ConsumerConfig) error {
 			if len(o.subjf) == 1 {
 				o.filters = nil
 			} else {
-				o.filters = NewSublistNoCache()
+				o.filters = gsl.NewSublist[struct{}]()
 				for _, filter := range o.subjf {
-					o.filters.Insert(&subscription{subject: []byte(filter.subject)})
+					o.filters.Insert(filter.subject, struct{}{})
 				}
 			}
 		}
@@ -2539,11 +2581,23 @@ func (o *consumer) addAckReply(sseq uint64, reply string) {
 // Used to remember messages that need to be sent for a replicated consumer, after delivered quorum.
 // Lock should be held.
 func (o *consumer) addReplicatedQueuedMsg(pmsg *jsPubMsg) {
-	// Is not explicitly limited in size, but will at maximum hold maximum ack pending.
+	// Is not explicitly limited in size, but will at most hold maximum ack pending.
 	if o.pendingDeliveries == nil {
 		o.pendingDeliveries = make(map[uint64]*jsPubMsg)
 	}
 	o.pendingDeliveries[pmsg.seq] = pmsg
+
+	// Is not explicitly limited in size, but will at most hold maximum waiting requests.
+	if o.waitingDeliveries == nil {
+		o.waitingDeliveries = make(map[string]*waitingDelivery)
+	}
+	if wd, ok := o.waitingDeliveries[pmsg.dsubj]; ok {
+		wd.seq = pmsg.seq
+	} else {
+		wd := wdPool.Get().(*waitingDelivery)
+		wd.seq = pmsg.seq
+		o.waitingDeliveries[pmsg.dsubj] = wd
+	}
 }
 
 // Lock should be held.
@@ -3304,11 +3358,10 @@ func (o *consumer) needAck(sseq uint64, subj string) bool {
 	// Check if we are filtered, and if so check if this is even applicable to us.
 	if isFiltered {
 		if subj == _EMPTY_ {
-			var svp StoreMsg
-			if _, err := o.mset.store.LoadMsg(sseq, &svp); err != nil {
+			var err error
+			if subj, err = o.mset.store.SubjectForSeq(sseq); err != nil {
 				return false
 			}
-			subj = svp.subj
 		}
 		if !o.isFilteredMatch(subj) {
 			return false
@@ -3443,6 +3496,28 @@ func (wr *waitingRequest) recycle() {
 	if wr != nil {
 		wr.next, wr.acc, wr.interest, wr.reply = nil, nil, _EMPTY_, _EMPTY_
 		wrPool.Put(wr)
+	}
+}
+
+// Represents an (optional) request timeout that's sent after waiting for replicated deliveries.
+type waitingDelivery struct {
+	seq uint64
+	pn  int // Pending messages.
+	pb  int // Pending bytes.
+}
+
+// sync.Pool for waiting deliveries.
+var wdPool = sync.Pool{
+	New: func() any {
+		return new(waitingDelivery)
+	},
+}
+
+// Force a recycle.
+func (wd *waitingDelivery) recycle() {
+	if wd != nil {
+		wd.seq, wd.pn, wd.pb = 0, 0, 0
+		wdPool.Put(wd)
 	}
 }
 
@@ -3721,8 +3796,19 @@ func (o *consumer) nextWaiting(sz int) *waitingRequest {
 			}
 		} else {
 			// We do check for expiration in `processWaiting`, but it is possible to hit the expiry here, and not there.
-			hdr := fmt.Appendf(nil, "NATS/1.0 408 Request Timeout\r\n%s: %d\r\n%s: %d\r\n\r\n", JSPullRequestPendingMsgs, wr.n, JSPullRequestPendingBytes, wr.b)
-			o.outq.send(newJSPubMsg(wr.reply, _EMPTY_, _EMPTY_, hdr, nil, nil, 0))
+			rdWait := o.replicateDeliveries()
+			if rdWait {
+				// Check if we need to send the timeout after pending replicated deliveries, or can do so immediately.
+				if wd, ok := o.waitingDeliveries[wr.reply]; !ok {
+					rdWait = false
+				} else {
+					wd.pn, wd.pb = wr.n, wr.b
+				}
+			}
+			if !rdWait {
+				hdr := fmt.Appendf(nil, "NATS/1.0 408 Request Timeout\r\n%s: %d\r\n%s: %d\r\n\r\n", JSPullRequestPendingMsgs, wr.n, JSPullRequestPendingBytes, wr.b)
+				o.outq.send(newJSPubMsg(wr.reply, _EMPTY_, _EMPTY_, hdr, nil, nil, 0))
+			}
 			o.waiting.removeCurrent()
 			if o.node != nil {
 				o.removeClusterPendingRequest(wr.reply)
@@ -3918,7 +4004,12 @@ func (o *consumer) processNextMsgRequest(reply string, msg []byte) {
 	wr.received = time.Now()
 
 	if err := o.waiting.add(wr); err != nil {
-		sendErr(409, "Exceeded MaxWaiting")
+		// If the client has a heartbeat interval set, don't bother responding with a 409,
+		// otherwise we can end up in a hot loop with the client re-requesting instead of
+		// waiting for the missing heartbeats instead and retrying.
+		if hb == 0 {
+			sendErr(409, "Exceeded MaxWaiting")
+		}
 		wr.recycle()
 		return
 	}
@@ -4106,6 +4197,7 @@ func (o *consumer) getNextMsg() (*jsPubMsg, uint64, error) {
 			o.updateSkipped(o.sseq)
 		} else {
 			o.lss.seqs = o.lss.seqs[1:]
+			o.sseq = seq
 		}
 		pmsg := getJSPubMsgFromPool()
 		sm, err := o.mset.store.LoadMsg(seq, &pmsg.StoreMsg)
@@ -4181,8 +4273,19 @@ func (o *consumer) processWaiting(eos bool) (int, int, int, time.Time) {
 	for wr := wq.head; wr != nil; {
 		// Check expiration.
 		if (eos && wr.noWait && wr.d > 0) || (!wr.expires.IsZero() && now.After(wr.expires)) {
-			hdr := fmt.Appendf(nil, "NATS/1.0 408 Request Timeout\r\n%s: %d\r\n%s: %d\r\n\r\n", JSPullRequestPendingMsgs, wr.n, JSPullRequestPendingBytes, wr.b)
-			o.outq.send(newJSPubMsg(wr.reply, _EMPTY_, _EMPTY_, hdr, nil, nil, 0))
+			rdWait := o.replicateDeliveries()
+			if rdWait {
+				// Check if we need to send the timeout after pending replicated deliveries, or can do so immediately.
+				if wd, ok := o.waitingDeliveries[wr.reply]; !ok {
+					rdWait = false
+				} else {
+					wd.pn, wd.pb = wr.n, wr.b
+				}
+			}
+			if !rdWait {
+				hdr := fmt.Appendf(nil, "NATS/1.0 408 Request Timeout\r\n%s: %d\r\n%s: %d\r\n\r\n", JSPullRequestPendingMsgs, wr.n, JSPullRequestPendingBytes, wr.b)
+				o.outq.send(newJSPubMsg(wr.reply, _EMPTY_, _EMPTY_, hdr, nil, nil, 0))
+			}
 			wr = remove(pre, wr)
 			continue
 		}
@@ -4362,16 +4465,19 @@ func (o *consumer) processInboundAcks(qch chan struct{}) {
 	for {
 		select {
 		case <-o.ackMsgs.ch:
+			// If we have an inactiveThreshold set, mark our activity.
+			// Do this before processing acks, otherwise we might race if there are no pending messages
+			// anymore and the inactivity threshold kicks in before we're able to mark activity.
+			if hasInactiveThresh {
+				o.suppressDeletion()
+			}
+
 			acks := o.ackMsgs.pop()
 			for _, ack := range acks {
 				o.processAck(ack.subject, ack.reply, ack.hdr, ack.msg)
 				ack.returnToPool()
 			}
 			o.ackMsgs.recycle(&acks)
-			// If we have an inactiveThreshold set, mark our activity.
-			if hasInactiveThresh {
-				o.suppressDeletion()
-			}
 		case <-ticker.C:
 			o.checkAckFloor()
 		case <-qch:
@@ -4419,8 +4525,11 @@ func (o *consumer) suppressDeletion() {
 		// if dtmr is not nil we have started the countdown, simply reset to threshold.
 		o.dtmr.Reset(o.dthresh)
 	} else if o.isPullMode() && o.waiting != nil {
-		// Pull mode always has timer running, just update last on waiting queue.
+		// Pull mode always has timer running, update last on waiting queue.
 		o.waiting.last = time.Now()
+		if o.dtmr != nil {
+			o.dtmr.Reset(o.dthresh)
+		}
 	}
 }
 
@@ -4864,13 +4973,10 @@ func (o *consumer) deliverMsg(dsubj, ackReply string, pmsg *jsPubMsg, dc uint64,
 	}
 
 	// Send message.
-	// If we're replicated we MUST only send the message AFTER we've got quorum for updating
-	// delivered state. Otherwise, we could be in an invalid state after a leader change.
-	// We can send immediately if not replicated, not using acks, or using flow control (incompatible).
-	if o.node == nil || ap == AckNone || o.cfg.FlowControl {
-		o.outq.send(pmsg)
-	} else {
+	if o.replicateDeliveries() {
 		o.addReplicatedQueuedMsg(pmsg)
+	} else {
+		o.outq.send(pmsg)
 	}
 
 	// Flow control.
@@ -4891,6 +4997,15 @@ func (o *consumer) deliverMsg(dsubj, ackReply string, pmsg *jsPubMsg, dc uint64,
 			o.updateAcks(dseq, seq, _EMPTY_)
 		}
 	}
+}
+
+// replicateDeliveries returns whether deliveries should be replicated before sending them.
+// If we're replicated we MUST only send the message AFTER we've got quorum for updating
+// delivered state. Otherwise, we could be in an invalid state after a leader change.
+// We can send immediately if not replicated, not using acks, or using flow control (incompatible).
+// Lock should be held.
+func (o *consumer) replicateDeliveries() bool {
+	return o.node != nil && o.cfg.AckPolicy != AckNone && !o.cfg.FlowControl
 }
 
 func (o *consumer) needFlowControl(sz int) bool {
@@ -5351,7 +5466,7 @@ func (o *consumer) selectStartingSeqNo() {
 				if mmp == 1 {
 					o.sseq = state.FirstSeq
 				} else {
-					var filters []string
+					filters := make([]string, 0, len(o.subjf))
 					if o.subjf == nil {
 						filters = append(filters, o.cfg.FilterSubject)
 					} else {
@@ -6139,4 +6254,8 @@ func (o *consumer) resetPendingDeliveries() {
 		pmsg.returnToPool()
 	}
 	o.pendingDeliveries = nil
+	for _, wd := range o.waitingDeliveries {
+		wd.recycle()
+	}
+	o.waitingDeliveries = nil
 }
