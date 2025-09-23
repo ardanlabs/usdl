@@ -233,7 +233,6 @@ func (h *tcpSrvHandlers) Process(r *tcp.Request, clt *tcp.Client) {
 			h.isLength = true
 		}
 	}
-
 }
 
 func (tcpSrvHandlers) Drop(clt *tcp.Client) {
