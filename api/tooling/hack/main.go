@@ -3,25 +3,17 @@ package main
 import (
 	"bufio"
 	"context"
-	"crypto/rand"
-	"crypto/rsa"
-	"crypto/x509"
-	"encoding/pem"
-	"errors"
+	"encoding/binary"
+	"encoding/json"
 	"fmt"
-	"io"
 	"log"
 	"os"
 	"os/signal"
-	"path/filepath"
 	"sync"
-	"sync/atomic"
 	"syscall"
 	"time"
 
 	"github.com/ardanlabs/usdl/foundation/tcp"
-	"github.com/delaneyj/toolbelt/embeddednats"
-	"github.com/nats-io/nats.go"
 )
 
 const filePath = "backend/zarf/client"
@@ -142,53 +134,106 @@ func tcpClient(logger tcp.Logger) error {
 
 // =============================================================================
 
-type keyType int
+type metadata struct {
+	FileName string `json:"filename"`
+	Size     int16  `json:"size"`
+}
 
-var keyValue keyType = 0
+// =============================================================================
 
-type tcpSrvHandlers struct{}
+type tcpSrvHandlers struct {
+	md       metadata
+	buf      []byte
+	isLength bool
+	chunkLen int
+	written  int
+}
 
-func (tcpSrvHandlers) Bind(clt *tcp.Client) error {
+func NewTCPSrvHandlers() *tcpSrvHandlers {
+	return &tcpSrvHandlers{
+		isLength: true,
+	}
+}
+
+func (h *tcpSrvHandlers) Bind(clt *tcp.Client) error {
 	fmt.Println("***> SERVER: BIND", "TRACEDID", clt.TraceID(), clt.Conn.RemoteAddr().String(), clt.Conn.LocalAddr().String())
-	clt.Reader = bufio.NewReader(clt.Conn)
+
+	clt.Conn.Write([]byte("Hello\n"))
+
+	bufReader := bufio.NewReader(clt.Conn)
+	line, _, err := bufReader.ReadLine()
+	if err != nil {
+		fmt.Println("reading line:", err)
+		return err
+	}
+
+	var md metadata
+	if err := json.Unmarshal(line, &md); err != nil {
+		fmt.Println("unmarshalling metadata:", err)
+		return err
+	}
+
+	h.md = md
 
 	return nil
 }
 
-var bill atomic.Int64
-
-func (tcpSrvHandlers) Read(clt *tcp.Client) ([]byte, int, error) {
-	bufReader := clt.Reader.(*bufio.Reader)
-
+func (h *tcpSrvHandlers) Read(clt *tcp.Client) ([]byte, int, error) {
 	fmt.Println("***> SERVER: WAITING ON READ", "TRACEDID", clt.TraceID())
 
-	// Force a delay to simulate a long read.
-	// if bill.CompareAndSwap(0, 1) {
-	// 	time.Sleep(100 * time.Second)
-	// }
-
-	// Read a small string to keep the code simple.
-	line, err := bufReader.ReadString('\n')
+	data := make([]byte, 4096)
+	n, err := clt.Conn.Read(data)
 	if err != nil {
+		fmt.Println("reading line:", err)
 		return nil, 0, err
 	}
 
-	fmt.Println("***> SERVER: MESSAGE READ", "TRACEDID", clt.TraceID())
+	h.buf = append(h.buf, data...)
 
-	return []byte(line), len(line), nil
+	return data, n, nil
 }
 
-func (tcpSrvHandlers) Process(r *tcp.Request, clt *tcp.Client) {
+func (h *tcpSrvHandlers) Process(r *tcp.Request, clt *tcp.Client) {
 	fmt.Println("***> SERVER: CLIENT MESSAGE:", "TRACEDID", clt.TraceID(), string(r.Data))
 
-	resp := "GOT IT\n"
+	for {
+		// WE NEED TO KNOW IF WE EXPECT TO HAVE A LENGTH AT THE BEGINNING
+		// OF THE BUFFER OR NOT.
+		if h.isLength {
+			uVal := binary.LittleEndian.Uint16(h.buf[:2])
+			h.chunkLen = int(uVal)
+			h.buf = h.buf[2:]
+		}
 
-	fmt.Println("***> SERVER: SEND:", "TRACEDID", clt.TraceID(), resp)
+		// WRITTEN 0 BYTES
+		// CHUNKLEN 4096
+		// BUF 1024
 
-	if _, err := clt.Writer.Write([]byte(resp)); err != nil {
-		fmt.Println("***> SERVER: ERROR SENDING RESPONSE:", err)
-		return
+		// WRITTEN 1024 BYTES
+		// CHUNKLEN 4096
+		// BUF 512
+
+		switch {
+		case len(h.buf) < (h.chunkLen - h.written):
+			fmt.Println("WRITE %d BYTES TO DISK 1", len(h.buf))
+			h.buf = h.buf[len(h.buf):]
+			h.written += len(h.buf)
+
+		case len(h.buf) == (h.chunkLen - h.written):
+			fmt.Println("WRITE %d BYTES TO DISK 2", len(h.buf))
+			h.buf = h.buf[len(h.buf):]
+			h.written = 0
+			h.isLength = true
+
+		case len(h.buf) > (h.chunkLen - h.written):
+			diff := h.chunkLen - h.written
+			fmt.Println("WRITE %d BYTES TO DISK 3", diff)
+			h.buf = h.buf[diff:]
+			h.written = 0
+			h.isLength = true
+		}
 	}
+
 }
 
 func (tcpSrvHandlers) Drop(clt *tcp.Client) {
@@ -230,148 +275,4 @@ func (tcpCltHandlers) Process(r *tcp.Request, clt *tcp.Client) {
 
 func (tcpCltHandlers) Drop(clt *tcp.Client) {
 	fmt.Println("***> CLIENT: CONNECTION CLOSED", "TRACEDID", clt.TraceID())
-}
-
-// =============================================================================
-
-func natsexp() error {
-	ctx := context.Background()
-
-	ns, err := embeddednats.New(ctx, embeddednats.WithDirectory("zarf/data/nats"))
-	if err != nil {
-		return fmt.Errorf("starting NATS server: %w", err)
-	}
-	ns.WaitForServer()
-
-	nc, err := ns.Client()
-	if err != nil {
-		return fmt.Errorf("connecting to NATS server: %w", err)
-	}
-
-	const webUpdateSubject = "web.update"
-
-	var wg sync.WaitGroup
-	wg.Add(1)
-
-	go func() {
-		defer wg.Done()
-
-		ch := make(chan *nats.Msg, 1)
-		defer close(ch)
-
-		sub, err := nc.ChanSubscribe(webUpdateSubject, ch)
-		if err != nil {
-			log.Printf("subscribing to %s: %s", webUpdateSubject, err)
-			return
-		}
-		defer sub.Unsubscribe()
-
-		log.Println("Waiting For message")
-
-		v := <-ch
-		log.Println(string(v.Data))
-	}()
-
-	log.Println("Publish message")
-
-	time.Sleep(time.Second)
-
-	if err := nc.Publish(webUpdateSubject, []byte("update")); err != nil {
-		return fmt.Errorf("publish: %w", err)
-	}
-
-	wg.Wait()
-
-	return nil
-}
-
-func key() error {
-	fileName := filepath.Join(filePath, "key.rsa")
-
-	if err := generatePrivateKey(fileName); err != nil {
-		return fmt.Errorf("generatePrivateKey: %w", err)
-	}
-
-	// -------------------------------------------------------------------------
-
-	file, err := os.Open(fileName)
-	if err != nil {
-		return fmt.Errorf("opening key file: %w", err)
-	}
-	defer file.Close()
-
-	pemData, err := io.ReadAll(io.LimitReader(file, 1024*1024))
-	if err != nil {
-		return fmt.Errorf("reading auth private key: %w", err)
-	}
-
-	privatePEM := string(pemData)
-
-	block, _ := pem.Decode([]byte(privatePEM))
-	if block == nil {
-		return errors.New("invalid key: Key must be a PEM encoded PKCS1 or PKCS8 key")
-	}
-
-	var parsedKey any
-	parsedKey, err = x509.ParsePKCS1PrivateKey(block.Bytes)
-	if err != nil {
-		parsedKey, err = x509.ParsePKCS8PrivateKey(block.Bytes)
-		if err != nil {
-			return err
-		}
-	}
-
-	pk, ok := parsedKey.(*rsa.PrivateKey)
-	if !ok {
-		return errors.New("key is not a valid RSA private key")
-	}
-
-	// -------------------------------------------------------------------------
-
-	encryptedData, err := rsa.EncryptPKCS1v15(rand.Reader, &pk.PublicKey, []byte("Hi Kevin, this is a secret message!"))
-	if err != nil {
-		return fmt.Errorf("encrypting message: %w", err)
-	}
-
-	fmt.Println(string(encryptedData))
-	fmt.Println("")
-
-	// -------------------------------------------------------------------------
-
-	decryptedData, err := rsa.DecryptPKCS1v15(nil, pk, encryptedData)
-	if err != nil {
-		return fmt.Errorf("decrypting message: %w", err)
-	}
-
-	fmt.Println(string(decryptedData))
-
-	return nil
-}
-
-func generatePrivateKey(fileName string) error {
-	if _, err := os.Stat(fileName); err == nil {
-		return nil
-	}
-
-	privateKey, err := rsa.GenerateKey(rand.Reader, 2048)
-	if err != nil {
-		return fmt.Errorf("generating key: %w", err)
-	}
-
-	privateFile, err := os.Create(fileName)
-	if err != nil {
-		return fmt.Errorf("creating private file: %w", err)
-	}
-	defer privateFile.Close()
-
-	privateBlock := pem.Block{
-		Type:  "PRIVATE KEY",
-		Bytes: x509.MarshalPKCS1PrivateKey(privateKey),
-	}
-
-	if err := pem.Encode(privateFile, &privateBlock); err != nil {
-		return fmt.Errorf("encoding to private file: %w", err)
-	}
-
-	return nil
 }
