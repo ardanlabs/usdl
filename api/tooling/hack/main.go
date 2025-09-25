@@ -2,21 +2,20 @@ package main
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"encoding/binary"
 	"encoding/json"
 	"fmt"
 	"log"
+	"math/rand"
 	"os"
 	"os/signal"
-	"sync"
 	"syscall"
 	"time"
 
 	"github.com/ardanlabs/usdl/foundation/tcp"
 )
-
-const filePath = "backend/zarf/client"
 
 func main() {
 	if err := run(); err != nil {
@@ -36,7 +35,7 @@ func run() error {
 	cfg := tcp.ServerConfig{
 		NetType:  "tcp4",
 		Addr:     "0.0.0.0:3001",
-		Handlers: tcpSrvHandlers{},
+		Handlers: NewTCPSrvHandlers(),
 		Logger:   logger,
 	}
 
@@ -56,10 +55,7 @@ func run() error {
 	// -------------------------------------------------------------------------
 	// CLIENT SIDE
 
-	go func() {
-		fmt.Println("***> START CLIENT TEST")
-		tcpClient(logger)
-	}()
+	tcpClient(logger)
 
 	// -------------------------------------------------------------------------
 	// Shutdown
@@ -86,8 +82,6 @@ func run() error {
 	return nil
 }
 
-var cltWG sync.WaitGroup
-
 func tcpClient(logger tcp.Logger) error {
 	const netType = "tcp4"
 	const addr = "0.0.0.0:3001"
@@ -101,33 +95,54 @@ func tcpClient(logger tcp.Logger) error {
 	if err != nil {
 		return fmt.Errorf("creating new TCP client manager: %w", err)
 	}
-	defer cm.Shutdown(context.Background())
+	// defer cm.Shutdown(context.Background())
 
-	cltWG.Add(2)
+	fmt.Println("***> Waiting for server to start...")
+	time.Sleep(300 * time.Millisecond)
 
-	for i := range 2 {
-		go func() {
-			fmt.Println(i, "***> Waiting for server to start...")
-			time.Sleep(300 * time.Millisecond)
+	userID := "1234"
 
-			userID := fmt.Sprintf("user-%d", i)
-
-			clt, err := cm.Dial(context.TODO(), userID, netType, addr)
-			if err != nil {
-				fmt.Println(i, "dialing a new TCP connection: %w", err)
-				return
-			}
-
-			fmt.Print("***> CLIENT: SEND:", "Hello\n")
-
-			if _, err := clt.Writer.Write([]byte("Hello\n")); err != nil {
-				fmt.Println(i, "sending data to the connection: %w", err)
-				return
-			}
-		}()
+	clt, err := cm.Dial(context.TODO(), userID, netType, addr)
+	if err != nil {
+		fmt.Println("dialing a new TCP connection: %w", err)
+		return err
 	}
 
-	cltWG.Wait()
+	data := []string{
+		"I'm happy. ",
+		"She exercises every morning. ",
+		"His dog barks loudly. ",
+		"My school starts at 8:00. ",
+		"We always eat dinner together. ",
+		"They take the bus to work. ",
+		"He doesn't like vegetables. ",
+		"I don't want anything to drink. ",
+		"This little black dress isn't expensive. ",
+		"Those kids don't speak English.",
+	}
+
+	var streamBuf bytes.Buffer
+	for _, d := range data {
+		l := len(d)
+		lenD := make([]byte, 2)
+		binary.LittleEndian.PutUint16(lenD, uint16(l))
+
+		streamBuf.Write(lenD)
+		streamBuf.WriteString(d)
+	}
+
+	stream := streamBuf.Bytes()
+
+	fmt.Println("**> CLIENT SENDING BYTES")
+
+	for len(stream) > 0 {
+		v := min(len(stream), min(rand.Intn(20), len(stream)))
+		if _, err := clt.Conn.Write([]byte(stream[:v])); err != nil {
+			fmt.Println("**> CLIENT SENDING BYTES", err)
+		}
+
+		stream = stream[v:]
+	}
 
 	return nil
 }
@@ -142,21 +157,19 @@ type metadata struct {
 // =============================================================================
 
 type tcpSrvHandlers struct {
-	md       metadata
-	buf      []byte
-	isLength bool
-	chunkLen int
-	written  int
+	md     metadata
+	buffer []byte
+	bufLen int
 }
 
 func NewTCPSrvHandlers() *tcpSrvHandlers {
 	return &tcpSrvHandlers{
-		isLength: true,
+		buffer: make([]byte, 1024*32),
 	}
 }
 
 func (h *tcpSrvHandlers) Bind(clt *tcp.Client) error {
-	fmt.Println("***> SERVER: BIND", "TRACEDID", clt.TraceID(), clt.Conn.RemoteAddr().String(), clt.Conn.LocalAddr().String())
+	fmt.Println("***>1 SERVER: BIND", "TRACEDID", clt.TraceID(), clt.Conn.RemoteAddr().String(), clt.Conn.LocalAddr().String())
 
 	clt.Conn.Write([]byte("Hello\n"))
 
@@ -167,13 +180,17 @@ func (h *tcpSrvHandlers) Bind(clt *tcp.Client) error {
 		return err
 	}
 
+	fmt.Println("***>2 SERVER: BIND", "TRACEDID", clt.TraceID(), string(line))
+
 	var md metadata
 	if err := json.Unmarshal(line, &md); err != nil {
-		fmt.Println("unmarshalling metadata:", err)
+		fmt.Println("SERVER: unmarshalling metadata:", err)
 		return err
 	}
 
 	h.md = md
+
+	fmt.Println("***>3 SERVER: BIND", "TRACEDID", clt.TraceID(), clt.Conn.RemoteAddr().String(), clt.Conn.LocalAddr().String(), md)
 
 	return nil
 }
@@ -182,57 +199,45 @@ func (h *tcpSrvHandlers) Read(clt *tcp.Client) ([]byte, int, error) {
 	fmt.Println("***> SERVER: WAITING ON READ", "TRACEDID", clt.TraceID())
 
 	data := make([]byte, 4096)
-	n, err := clt.Conn.Read(data)
+	v, err := clt.Conn.Read(data)
 	if err != nil {
-		fmt.Println("reading line:", err)
+		fmt.Printf("reading line: BYTES[%d] %v\n", v, err)
 		return nil, 0, err
 	}
 
-	h.buf = append(h.buf, data...)
+	n := copy(h.buffer[h.bufLen:], data[:v])
+	h.bufLen += n
+
+	fmt.Println("***> SERVER: READ", "TRACEDID", clt.TraceID(), n)
 
 	return data, n, nil
 }
 
 func (h *tcpSrvHandlers) Process(r *tcp.Request, clt *tcp.Client) {
-	fmt.Println("***> SERVER: CLIENT MESSAGE:", "TRACEDID", clt.TraceID(), string(r.Data))
+	fmt.Println("***> SERVER: CLIENT MESSAGE:", "TRACEDID", clt.TraceID())
 
-	for {
-		// WE NEED TO KNOW IF WE EXPECT TO HAVE A LENGTH AT THE BEGINNING
-		// OF THE BUFFER OR NOT.
-		if h.isLength {
-			uVal := binary.LittleEndian.Uint16(h.buf[:2])
-			h.chunkLen = int(uVal)
-			h.buf = h.buf[2:]
-		}
+	// WE NEED A LOOP HERE FOR GETTING A BUNCH OF BYTES
 
-		// WRITTEN 0 BYTES
-		// CHUNKLEN 4096
-		// BUF 1024
+	const prefix = 2
 
-		// WRITTEN 1024 BYTES
-		// CHUNKLEN 4096
-		// BUF 512
-
-		switch {
-		case len(h.buf) < (h.chunkLen - h.written):
-			fmt.Println("WRITE %d BYTES TO DISK 1", len(h.buf))
-			h.buf = h.buf[len(h.buf):]
-			h.written += len(h.buf)
-
-		case len(h.buf) == (h.chunkLen - h.written):
-			fmt.Println("WRITE %d BYTES TO DISK 2", len(h.buf))
-			h.buf = h.buf[len(h.buf):]
-			h.written = 0
-			h.isLength = true
-
-		case len(h.buf) > (h.chunkLen - h.written):
-			diff := h.chunkLen - h.written
-			fmt.Println("WRITE %d BYTES TO DISK 3", diff)
-			h.buf = h.buf[diff:]
-			h.written = 0
-			h.isLength = true
-		}
+	// DO WE HAVE ENOUGH BYTES FOR LENGTH?
+	if len(h.buffer) <= 1 {
+		return
 	}
+
+	// DO WE HAVE ALL THE EXPECTED BYTES
+	uVal := binary.LittleEndian.Uint16(h.buffer[:prefix])
+	chunkLen := int(uVal)
+	if chunkLen > h.bufLen-prefix {
+		return
+	}
+
+	// WRITE BYTES TO DISK
+	fmt.Println("***> WRITE BYTES TO DISK:", string(h.buffer[prefix:chunkLen+prefix]))
+
+	// MOVE BYTES TO FRONT OF BUFFER
+	n := copy(h.buffer, h.buffer[prefix+chunkLen:h.bufLen])
+	h.bufLen = n
 }
 
 func (tcpSrvHandlers) Drop(clt *tcp.Client) {
@@ -245,31 +250,40 @@ type tcpCltHandlers struct{}
 
 func (tcpCltHandlers) Bind(clt *tcp.Client) error {
 	fmt.Println("***> CLIENT: BIND", "TRACEDID", clt.TraceID(), clt.Conn.RemoteAddr().String(), clt.Conn.LocalAddr().String())
-	clt.Reader = bufio.NewReader(clt.Conn)
+
+	bufReader := bufio.NewReader(clt.Conn)
+	line, _, err := bufReader.ReadLine()
+	if err != nil {
+		fmt.Println("reading line:", err)
+		return err
+	}
+
+	fmt.Println("***> CLIENT: BIND", "TRACEDID", clt.TraceID(), clt.Conn.RemoteAddr().String(), clt.Conn.LocalAddr().String(), string(line))
+
+	md := metadata{
+		FileName: "bill.txt",
+		Size:     10_000,
+	}
+
+	data, err := json.Marshal(md)
+	if err != nil {
+		fmt.Println("marshal:", err)
+		return err
+	}
+
+	fmt.Println("***> CLIENT: BIND", "TRACEDID", clt.TraceID(), string(data))
+
+	clt.Conn.Write(data)
+	clt.Conn.Write([]byte("\n"))
 
 	return nil
 }
 
 func (tcpCltHandlers) Read(clt *tcp.Client) ([]byte, int, error) {
-	bufReader := clt.Reader.(*bufio.Reader)
-
-	fmt.Println("***> CLIENT: WAITING ON READ", "TRACEDID", clt.TraceID())
-
-	// Read a small string to keep the code simple.
-	line, err := bufReader.ReadString('\n')
-	if err != nil {
-		return nil, 0, err
-	}
-
-	fmt.Println("***> CLIENT: MESSAGE READ", "TRACEDID", clt.TraceID())
-
-	return []byte(line), len(line), nil
+	return nil, 0, nil
 }
 
 func (tcpCltHandlers) Process(r *tcp.Request, clt *tcp.Client) {
-	fmt.Println("***> CLIENT: SERVER MESSAGE:", "TRACEDID", clt.TraceID(), string(r.Data))
-
-	cltWG.Done()
 }
 
 func (tcpCltHandlers) Drop(clt *tcp.Client) {
