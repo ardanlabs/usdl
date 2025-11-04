@@ -47,7 +47,8 @@ type (
 		lastMsgID      string        // Expected last msgId
 		stream         string        // Expected stream name
 		lastSeq        *uint64       // Expected last sequence
-		lastSubjectSeq *uint64       // Expected last sequence per subject
+		lastSubjectSeq *uint64       // Expected last sequence for subject
+		lastSubject    string        // Expected subject for last sequence
 		ttl            time.Duration // Message TTL
 
 		// Publish retries for NoResponders err.
@@ -129,6 +130,8 @@ type (
 
 		// Domain is the domain the message was published to.
 		Domain string `json:"domain,omitempty"`
+
+		Value string `json:"val,omitempty"`
 	}
 )
 
@@ -193,6 +196,10 @@ func (js *jetStream) PublishMsg(ctx context.Context, m *nats.Msg, opts ...Publis
 		m.Header.Set(ExpectedLastSeqHeader, strconv.FormatUint(*o.lastSeq, 10))
 	}
 	if o.lastSubjectSeq != nil {
+		m.Header.Set(ExpectedLastSubjSeqHeader, strconv.FormatUint(*o.lastSubjectSeq, 10))
+	}
+	if o.lastSubject != "" {
+		m.Header.Set(ExpectedLastSubjSeqSubjHeader, o.lastSubject)
 		m.Header.Set(ExpectedLastSubjSeqHeader, strconv.FormatUint(*o.lastSubjectSeq, 10))
 	}
 	if o.ttl > 0 {
@@ -279,6 +286,10 @@ func (js *jetStream) PublishMsgAsync(m *nats.Msg, opts ...PublishOpt) (PubAckFut
 		m.Header.Set(ExpectedLastSeqHeader, strconv.FormatUint(*o.lastSeq, 10))
 	}
 	if o.lastSubjectSeq != nil {
+		m.Header.Set(ExpectedLastSubjSeqHeader, strconv.FormatUint(*o.lastSubjectSeq, 10))
+	}
+	if o.lastSubject != "" {
+		m.Header.Set(ExpectedLastSubjSeqSubjHeader, o.lastSubject)
 		m.Header.Set(ExpectedLastSubjSeqHeader, strconv.FormatUint(*o.lastSubjectSeq, 10))
 	}
 	if o.ttl > 0 {
