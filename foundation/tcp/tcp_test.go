@@ -21,6 +21,8 @@ func TestTCP(t *testing.T) {
 			NetType:  "tcp4",
 			Addr:     ":0",
 			Handlers: tcpHandlers{},
+			Logger: func(ctx context.Context, name string, evt string, typ string, ipAddress string, format string, a ...any) {
+			},
 		}
 
 		// Create a new TCP value.
@@ -37,6 +39,11 @@ func TestTCP(t *testing.T) {
 			}
 			t.Log("\tShould be able to start the TCP listener.", "OK")
 		}()
+
+		// Wait for the listener to be ready.
+		for u.Addr() == nil {
+			time.Sleep(10 * time.Millisecond)
+		}
 
 		// Let's connect back and send a TCP package
 		conn, err := net.Dial("tcp4", u.Addr().String())
@@ -92,6 +99,8 @@ func TestTCPAddr(t *testing.T) {
 			NetType:  "tcp4",
 			Addr:     ":0", // Defer port assignment to OS.
 			Handlers: tcpHandlers{},
+			Logger: func(ctx context.Context, name string, evt string, typ string, ipAddress string, format string, a ...any) {
+			},
 		}
 
 		// Create a new TCP value.
@@ -113,6 +122,11 @@ func TestTCPAddr(t *testing.T) {
 				t.Error("\tShould be able to start the TCP listener.", "X", err)
 			}
 		}()
+
+		// Wait for the listener to be ready.
+		for u.Addr() == nil {
+			time.Sleep(10 * time.Millisecond)
+		}
 
 		// Addr should be non-nil after Start.
 		addr := u.Addr()

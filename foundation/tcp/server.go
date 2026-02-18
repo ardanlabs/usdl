@@ -51,8 +51,7 @@ type Server struct {
 	listener               *listener
 	clients                *clients
 	wgStartG               sync.WaitGroup
-	shuttingDown           atomic.Bool
-	lastAcceptedConnection time.Time
+	shuttingDown atomic.Bool
 }
 
 // NewServer creates an API for a TCP server that can accept connections.
@@ -209,8 +208,14 @@ func (srv *Server) CloseClient(tcpAddr *net.TCPAddr) error {
 
 // Addr returns the listener's network address. This may be different than the values
 // provided in the configuration, for example if configuration port value is 0.
+// Returns nil if the listener has not been started.
 func (srv *Server) Addr() net.Addr {
-	return srv.tcpAddr
+	l := srv.listener.tcpListener()
+	if l == nil {
+		return nil
+	}
+
+	return l.Addr()
 }
 
 // Clients returns the number of active clients connected by user ID.

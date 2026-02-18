@@ -20,13 +20,6 @@ func newClients(log internalLogger) *clients {
 	}
 }
 
-func (clt *clients) count() int {
-	clt.clientsMu.RLock()
-	defer clt.clientsMu.RUnlock()
-
-	return len(clt.clients)
-}
-
 func (clt *clients) copy() map[string]*Client {
 	clt.clientsMu.RLock()
 	defer clt.clientsMu.RUnlock()
