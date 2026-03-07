@@ -1,19 +1,16 @@
-# github.com/ProjectZKM/Ziren/crates/go-runtime/zkvm_runtime v0.0.0-20260218040609-6f1c0c95351b
+# github.com/ProjectZKM/Ziren/crates/go-runtime/zkvm_runtime v0.0.0-20260306153642-7af605dba7e9
 ## explicit; go 1.24.0
 github.com/ProjectZKM/Ziren/crates/go-runtime/zkvm_runtime
 # github.com/agnivade/levenshtein v1.2.1
 ## explicit; go 1.21
 github.com/agnivade/levenshtein
-# github.com/ardanlabs/conf/v3 v3.10.0
+# github.com/ardanlabs/conf/v3 v3.11.0
 ## explicit; go 1.23.0
 github.com/ardanlabs/conf/v3
-# github.com/beorn7/perks v1.0.1
-## explicit; go 1.11
-github.com/beorn7/perks/quantile
 # github.com/cespare/xxhash/v2 v2.3.0
 ## explicit; go 1.11
 github.com/cespare/xxhash/v2
-# github.com/decred/dcrd/dcrec/secp256k1/v4 v4.4.0
+# github.com/decred/dcrd/dcrec/secp256k1/v4 v4.4.1
 ## explicit; go 1.17
 github.com/decred/dcrd/dcrec/secp256k1/v4
 github.com/decred/dcrd/dcrec/secp256k1/v4/ecdsa
@@ -21,7 +18,7 @@ github.com/decred/dcrd/dcrec/secp256k1/v4/ecdsa
 ## explicit; go 1.13
 github.com/dlclark/regexp2
 github.com/dlclark/regexp2/syntax
-# github.com/ethereum/go-ethereum v1.17.0
+# github.com/ethereum/go-ethereum v1.17.1
 ## explicit; go 1.24.0
 github.com/ethereum/go-ethereum/common
 github.com/ethereum/go-ethereum/common/hexutil
@@ -71,13 +68,6 @@ github.com/gdamore/tcell/v2/terminfo/x/xfce
 github.com/gdamore/tcell/v2/terminfo/x/xterm
 github.com/gdamore/tcell/v2/terminfo/x/xterm_ghostty
 github.com/gdamore/tcell/v2/terminfo/x/xterm_kitty
-# github.com/go-logr/logr v1.4.3
-## explicit; go 1.18
-github.com/go-logr/logr
-github.com/go-logr/logr/funcr
-# github.com/go-logr/stdr v1.2.2
-## explicit; go 1.16
-github.com/go-logr/stdr
 # github.com/gobwas/glob v0.2.3
 ## explicit
 github.com/gobwas/glob
@@ -170,11 +160,8 @@ github.com/lestrrat-go/option/v2
 # github.com/lucasb-eyer/go-colorful v1.3.0
 ## explicit; go 1.12
 github.com/lucasb-eyer/go-colorful
-# github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822
-## explicit
-github.com/munnerz/goautoneg
-# github.com/nats-io/nats.go v1.48.0
-## explicit; go 1.23.0
+# github.com/nats-io/nats.go v1.49.0
+## explicit; go 1.24.0
 github.com/nats-io/nats.go
 github.com/nats-io/nats.go/encoders/builtin
 github.com/nats-io/nats.go/internal/parser
@@ -187,15 +174,14 @@ github.com/nats-io/nkeys
 # github.com/nats-io/nuid v1.0.1
 ## explicit
 github.com/nats-io/nuid
-# github.com/open-policy-agent/opa v1.13.2
-## explicit; go 1.24.6
+# github.com/open-policy-agent/opa v1.14.0
+## explicit; go 1.25.0
 github.com/open-policy-agent/opa/capabilities
 github.com/open-policy-agent/opa/internal/bundle
 github.com/open-policy-agent/opa/internal/cidr/merge
 github.com/open-policy-agent/opa/internal/compiler
 github.com/open-policy-agent/opa/internal/compiler/wasm
 github.com/open-policy-agent/opa/internal/compiler/wasm/opa
-github.com/open-policy-agent/opa/internal/config
 github.com/open-policy-agent/opa/internal/debug
 github.com/open-policy-agent/opa/internal/deepcopy
 github.com/open-policy-agent/opa/internal/edittree
@@ -214,13 +200,10 @@ github.com/open-policy-agent/opa/internal/providers/aws/crypto
 github.com/open-policy-agent/opa/internal/providers/aws/v4
 github.com/open-policy-agent/opa/internal/ref
 github.com/open-policy-agent/opa/internal/rego/opa
-github.com/open-policy-agent/opa/internal/runtime/init
 github.com/open-policy-agent/opa/internal/semver
 github.com/open-policy-agent/opa/internal/strings
-github.com/open-policy-agent/opa/internal/strvals
 github.com/open-policy-agent/opa/internal/uuid
 github.com/open-policy-agent/opa/internal/version
-github.com/open-policy-agent/opa/internal/versioncheck
 github.com/open-policy-agent/opa/internal/wasm/constant
 github.com/open-policy-agent/opa/internal/wasm/encoding
 github.com/open-policy-agent/opa/internal/wasm/instruction
@@ -236,9 +219,7 @@ github.com/open-policy-agent/opa/v1/ast/json
 github.com/open-policy-agent/opa/v1/ast/location
 github.com/open-policy-agent/opa/v1/bundle
 github.com/open-policy-agent/opa/v1/capabilities
-github.com/open-policy-agent/opa/v1/config
 github.com/open-policy-agent/opa/v1/format
-github.com/open-policy-agent/opa/v1/hooks
 github.com/open-policy-agent/opa/v1/ir
 github.com/open-policy-agent/opa/v1/keys
 github.com/open-policy-agent/opa/v1/loader
@@ -246,8 +227,6 @@ github.com/open-policy-agent/opa/v1/loader/extension
 github.com/open-policy-agent/opa/v1/loader/filter
 github.com/open-policy-agent/opa/v1/logging
 github.com/open-policy-agent/opa/v1/metrics
-github.com/open-policy-agent/opa/v1/plugins
-github.com/open-policy-agent/opa/v1/plugins/rest
 github.com/open-policy-agent/opa/v1/rego
 github.com/open-policy-agent/opa/v1/resolver
 github.com/open-policy-agent/opa/v1/resolver/wasm
@@ -269,22 +248,10 @@ github.com/open-policy-agent/opa/v1/version
 # github.com/pkoukk/tiktoken-go v0.1.8
 ## explicit; go 1.19
 github.com/pkoukk/tiktoken-go
-# github.com/prometheus/client_golang v1.23.2
-## explicit; go 1.23.0
-github.com/prometheus/client_golang/prometheus
-github.com/prometheus/client_golang/prometheus/internal
-# github.com/prometheus/client_model v0.6.2
-## explicit; go 1.22.0
-github.com/prometheus/client_model/go
 # github.com/prometheus/common v0.67.5
 ## explicit; go 1.24.0
-github.com/prometheus/common/expfmt
-github.com/prometheus/common/model
-# github.com/prometheus/procfs v0.19.2
-## explicit; go 1.24.0
-github.com/prometheus/procfs
-github.com/prometheus/procfs/internal/fs
-github.com/prometheus/procfs/internal/util
+# github.com/prometheus/procfs v0.20.1
+## explicit; go 1.25.0
 # github.com/rcrowley/go-metrics v0.0.0-20250401214520-65e299d6c5c9
 ## explicit
 github.com/rcrowley/go-metrics
@@ -317,11 +284,11 @@ github.com/tmc/langchaingo/llms
 github.com/tmc/langchaingo/llms/ollama
 github.com/tmc/langchaingo/llms/ollama/internal/ollamaclient
 github.com/tmc/langchaingo/schema
-# github.com/valyala/fastjson v1.6.8
+# github.com/valyala/fastjson v1.6.10
 ## explicit; go 1.24
 github.com/valyala/fastjson
 github.com/valyala/fastjson/fastfloat
-# github.com/vektah/gqlparser/v2 v2.5.31
+# github.com/vektah/gqlparser/v2 v2.5.32
 ## explicit; go 1.22
 github.com/vektah/gqlparser/v2/ast
 github.com/vektah/gqlparser/v2/gqlerror
@@ -339,45 +306,9 @@ github.com/xeipuuv/gojsonreference
 # github.com/yashtewari/glob-intersection v0.2.0
 ## explicit; go 1.17
 github.com/yashtewari/glob-intersection
-# go.opentelemetry.io/auto/sdk v1.2.1
-## explicit; go 1.24.0
-go.opentelemetry.io/auto/sdk
-go.opentelemetry.io/auto/sdk/internal/telemetry
-# go.opentelemetry.io/otel v1.40.0
-## explicit; go 1.24.0
-go.opentelemetry.io/otel
-go.opentelemetry.io/otel/attribute
-go.opentelemetry.io/otel/attribute/internal
-go.opentelemetry.io/otel/attribute/internal/xxhash
-go.opentelemetry.io/otel/baggage
-go.opentelemetry.io/otel/codes
-go.opentelemetry.io/otel/internal/baggage
-go.opentelemetry.io/otel/internal/global
-go.opentelemetry.io/otel/propagation
-go.opentelemetry.io/otel/semconv/v1.37.0
-go.opentelemetry.io/otel/semconv/v1.39.0
-go.opentelemetry.io/otel/semconv/v1.39.0/otelconv
-# go.opentelemetry.io/otel/metric v1.40.0
-## explicit; go 1.24.0
-go.opentelemetry.io/otel/metric
-go.opentelemetry.io/otel/metric/embedded
-go.opentelemetry.io/otel/metric/noop
-# go.opentelemetry.io/otel/sdk v1.40.0
-## explicit; go 1.24.0
-go.opentelemetry.io/otel/sdk
-go.opentelemetry.io/otel/sdk/instrumentation
-go.opentelemetry.io/otel/sdk/internal/x
-go.opentelemetry.io/otel/sdk/resource
-go.opentelemetry.io/otel/sdk/trace
-go.opentelemetry.io/otel/sdk/trace/internal/env
-go.opentelemetry.io/otel/sdk/trace/internal/observ
-# go.opentelemetry.io/otel/trace v1.40.0
-## explicit; go 1.24.0
-go.opentelemetry.io/otel/trace
-go.opentelemetry.io/otel/trace/embedded
-go.opentelemetry.io/otel/trace/internal/telemetry
-go.opentelemetry.io/otel/trace/noop
-# go.yaml.in/yaml/v2 v2.4.3
+# go.opentelemetry.io/otel v1.42.0
+## explicit; go 1.25.0
+# go.yaml.in/yaml/v2 v2.4.4
 ## explicit; go 1.15
 go.yaml.in/yaml/v2
 # go.yaml.in/yaml/v3 v3.0.4
@@ -402,7 +333,6 @@ golang.org/x/sys/cpu
 golang.org/x/sys/plan9
 golang.org/x/sys/unix
 golang.org/x/sys/windows
-golang.org/x/sys/windows/registry
 # golang.org/x/term v0.40.0
 ## explicit; go 1.24.0
 golang.org/x/term
@@ -411,40 +341,6 @@ golang.org/x/term
 golang.org/x/text/encoding
 golang.org/x/text/encoding/internal/identifier
 golang.org/x/text/transform
-# google.golang.org/protobuf v1.36.11
-## explicit; go 1.23
-google.golang.org/protobuf/encoding/protodelim
-google.golang.org/protobuf/encoding/prototext
-google.golang.org/protobuf/encoding/protowire
-google.golang.org/protobuf/internal/descfmt
-google.golang.org/protobuf/internal/descopts
-google.golang.org/protobuf/internal/detrand
-google.golang.org/protobuf/internal/editiondefaults
-google.golang.org/protobuf/internal/encoding/defval
-google.golang.org/protobuf/internal/encoding/messageset
-google.golang.org/protobuf/internal/encoding/tag
-google.golang.org/protobuf/internal/encoding/text
-google.golang.org/protobuf/internal/errors
-google.golang.org/protobuf/internal/filedesc
-google.golang.org/protobuf/internal/filetype
-google.golang.org/protobuf/internal/flags
-google.golang.org/protobuf/internal/genid
-google.golang.org/protobuf/internal/impl
-google.golang.org/protobuf/internal/order
-google.golang.org/protobuf/internal/pragma
-google.golang.org/protobuf/internal/protolazy
-google.golang.org/protobuf/internal/set
-google.golang.org/protobuf/internal/strs
-google.golang.org/protobuf/internal/version
-google.golang.org/protobuf/proto
-google.golang.org/protobuf/reflect/protoreflect
-google.golang.org/protobuf/reflect/protoregistry
-google.golang.org/protobuf/runtime/protoiface
-google.golang.org/protobuf/runtime/protoimpl
-google.golang.org/protobuf/types/known/timestamppb
-# gopkg.in/ini.v1 v1.67.1
-## explicit; go 1.13
-gopkg.in/ini.v1
 # sigs.k8s.io/yaml v1.6.0
 ## explicit; go 1.22
 sigs.k8s.io/yaml
