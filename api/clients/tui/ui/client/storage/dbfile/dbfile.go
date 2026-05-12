@@ -4,6 +4,7 @@ package dbfile
 import (
 	"crypto/rand"
 	"crypto/rsa"
+	"crypto/sha256"
 	"fmt"
 	"sort"
 	"sync"
@@ -108,7 +109,7 @@ func (db *DB) QueryContactByID(id common.Address) (client.User, error) {
 		decryptedData := make([][]byte, len(msg.Content))
 
 		for i, msg := range msg.Content {
-			dd, err := rsa.DecryptPKCS1v15(rand.Reader, db.privKeyRSA, []byte(msg))
+			dd, err := rsa.DecryptOAEP(sha256.New(), rand.Reader, db.privKeyRSA, []byte(msg), nil)
 			if err != nil {
 				return client.User{}, fmt.Errorf("decrypting message: %w", err)
 			}
@@ -191,7 +192,7 @@ func (db *DB) InsertMessage(id common.Address, msg client.Message) error {
 	encryptedData := make([][]byte, len(msg.Content))
 
 	for i, msg := range msg.Content {
-		ed, err := rsa.EncryptPKCS1v15(rand.Reader, &db.privKeyRSA.PublicKey, msg)
+		ed, err := rsa.EncryptOAEP(sha256.New(), rand.Reader, &db.privKeyRSA.PublicKey, msg, nil)
 		if err != nil {
 			return fmt.Errorf("encrypting message: %w", err)
 		}

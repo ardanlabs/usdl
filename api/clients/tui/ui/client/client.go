@@ -6,6 +6,7 @@ import (
 	"context"
 	"crypto/rand"
 	"crypto/rsa"
+	"crypto/sha256"
 	"crypto/x509"
 	"encoding/json"
 	"encoding/pem"
@@ -552,7 +553,7 @@ func (app *App) preprocessRecvMessage(inMsg incomingMessage) error {
 		decryptedData := make([][]byte, len(msgs))
 
 		for i, msg := range msgs {
-			dd, err := rsa.DecryptPKCS1v15(rand.Reader, app.id.PrivKeyRSA, []byte(msg))
+			dd, err := rsa.DecryptOAEP(sha256.New(), rand.Reader, app.id.PrivKeyRSA, []byte(msg), nil)
 			if err != nil {
 				return fmt.Errorf("decrypting message: %w", err)
 			}
@@ -630,7 +631,7 @@ func (app *App) preprocessSendMessage(usr User, msgs [][]byte) (onWire [][]byte,
 		encryptedData := make([][]byte, len(msgs))
 
 		for i, msg := range msgs {
-			ed, err := rsa.EncryptPKCS1v15(rand.Reader, publicKey, msg)
+			ed, err := rsa.EncryptOAEP(sha256.New(), rand.Reader, publicKey, msg, nil)
 			if err != nil {
 				return nil, nil, fmt.Errorf("encrypting message: %w", err)
 			}
